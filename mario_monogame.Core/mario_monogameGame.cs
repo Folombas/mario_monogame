@@ -23,6 +23,7 @@ namespace mario_monogame.Core
         private Sky sky;
         private Ground ground;
         private List<AppleTree> trees;
+        private List<CarrotPatch> carrotPatches;
 
         /// <summary>
         /// Indicates if the game is running on a mobile platform.
@@ -103,6 +104,13 @@ namespace mario_monogame.Core
                 new AppleTree(GraphicsDevice, new Vector2(600, screenHeight - 150), 1f),
                 new AppleTree(GraphicsDevice, new Vector2(950, screenHeight - 150), 1.1f),
             };
+
+            // Создаём грядки с морковками
+            carrotPatches = new List<CarrotPatch>
+            {
+                new CarrotPatch(GraphicsDevice, new Vector2(400, screenHeight - 100), 1f, 8),
+                new CarrotPatch(GraphicsDevice, new Vector2(750, screenHeight - 100), 1f, 8),
+            };
         }
 
         /// <summary>
@@ -120,10 +128,15 @@ namespace mario_monogame.Core
 
             // Обновляем игровые объекты
             sky.Update(gameTime);
-            
+
             foreach (var tree in trees)
             {
                 tree.Update(gameTime);
+            }
+
+            foreach (var carrotPatch in carrotPatches)
+            {
+                carrotPatch.Update(gameTime);
             }
 
             base.Update(gameTime);
@@ -151,6 +164,12 @@ namespace mario_monogame.Core
                 tree.Draw(spriteBatch);
             }
 
+            // Рисуем грядки с морковками
+            foreach (var carrotPatch in carrotPatches)
+            {
+                carrotPatch.Draw(spriteBatch);
+            }
+
             // Рисуем землю с зелёной лужайкой
             ground.Draw(spriteBatch);
 
@@ -166,10 +185,15 @@ namespace mario_monogame.Core
                 sky?.Dispose();
                 ground?.Dispose();
                 spriteBatch?.Dispose();
-                
+
                 foreach (var tree in trees)
                 {
                     // AppleTree не реализует IDisposable, но его листья и яблоки имеют текстуры
+                }
+
+                foreach (var carrotPatch in carrotPatches)
+                {
+                    carrotPatch?.Dispose();
                 }
             }
 
