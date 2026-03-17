@@ -166,6 +166,11 @@ namespace mario_monogame.Core
                 sky?.Dispose();
                 ground?.Dispose();
                 spriteBatch?.Dispose();
+                
+                foreach (var tree in trees)
+                {
+                    // AppleTree не реализует IDisposable, но его листья и яблоки имеют текстуры
+                }
             }
 
             base.Dispose(disposing);

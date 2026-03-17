@@ -16,6 +16,7 @@ namespace mario_monogame.Core.GameObjects
         private readonly float _scale;
         private readonly List<CloudPuff> _puffs;
         private float _floatOffset;
+        private Texture2D _pixelTexture;
 
         private struct CloudPuff
         {
@@ -30,7 +31,11 @@ namespace mario_monogame.Core.GameObjects
             _speed = speed;
             _scale = scale;
             _floatOffset = 0f;
-            
+
+            // Создаём белый пиксель для отрисовки
+            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
+
             // Создаём пуфы для облака
             _puffs = new List<CloudPuff>
             {
@@ -47,14 +52,13 @@ namespace mario_monogame.Core.GameObjects
         public void Update(GameTime gameTime)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            
+
             // Движение вправо
             _position.X += _speed * elapsed;
-            
+
             // Лёгкое покачивание вверх-вниз
             _floatOffset += elapsed * 2f;
-            float floatY = (float)Math.Sin(_floatOffset) * 3f;
-            
+
             // Если облако ушло за экран, перемещаем его влево
             if (_position.X > 1200)
             {
@@ -76,65 +80,46 @@ namespace mario_monogame.Core.GameObjects
 
         private void DrawPuff(SpriteBatch spriteBatch, Vector2 position, float radius)
         {
-            int segments = 20;
-
-            // Рисуем пуф как набор треугольников от центра
-            for (int i = 0; i < segments; i++)
-            {
-                double angle1 = i * Math.PI * 2 / segments;
-                double angle2 = (i + 1) * Math.PI * 2 / segments;
-
-                Vector2 point1 = new Vector2(
-                    position.X + (float)Math.Cos(angle1) * radius,
-                    position.Y + (float)Math.Sin(angle1) * radius
-                );
-                Vector2 point2 = new Vector2(
-                    position.X + (float)Math.Cos(angle2) * radius,
-                    position.Y + (float)Math.Sin(angle2) * radius
-                );
-
-                // Белый цвет с лёгкой прозрачностью по краям
-                Color puffColor = Color.White;
-
-                DrawFilledTriangle(spriteBatch, position, point1, point2, puffColor);
-            }
-
-            // Добавляем яркую середину для объёма
-            using var highlightTexture = new Texture2D(_graphicsDevice, 1, 1);
-            highlightTexture.SetData(new[] { Color.White });
-            
-            spriteBatch.Draw(
-                highlightTexture,
-                position - new Vector2(0, radius * 0.3f),
-                null,
-                new Color(255, 255, 255, 200),
-                0f,
-                Vector2.Zero,
-                radius * 0.4f,
-                SpriteEffects.None,
-                0f
-            );
+            // Рисуем пуф как круг
+            DrawCircle(spriteBatch, position, radius, Color.White);
         }
 
-        private void DrawFilledTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
+        private void DrawCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
         {
-            // Рисуем заполненный треугольник
+            int segments = 36;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float angle1 = (float)(i * Math.PI * 2 / segments);
+                float angle2 = (float)((i + 1) * Math.PI * 2 / segments);
+
+                Vector2 point1 = new Vector2(
+                    center.X + (float)Math.Cos(angle1) * radius,
+                    center.Y + (float)Math.Sin(angle1) * radius
+                );
+                Vector2 point2 = new Vector2(
+                    center.X + (float)Math.Cos(angle2) * radius,
+                    center.Y + (float)Math.Sin(angle2) * radius
+                );
+
+                DrawTriangle(spriteBatch, center, point1, point2, color);
+            }
+        }
+
+        private void DrawTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
+        {
             float minX = Math.Min(p1.X, Math.Min(p2.X, p3.X));
             float maxX = Math.Max(p1.X, Math.Max(p2.X, p3.X));
             float minY = Math.Min(p1.Y, Math.Min(p2.Y, p3.Y));
             float maxY = Math.Max(p1.Y, Math.Max(p2.Y, p3.Y));
 
-            using var pixelTexture = new Texture2D(_graphicsDevice, 1, 1);
-            pixelTexture.SetData(new[] { color });
-
-            // Простой алгоритм заполнения треугольника
-            for (float x = minX; x <= maxX; x += 2f)
+            for (float x = minX; x <= maxX; x += 1.5f)
             {
-                for (float y = minY; y <= maxY; y += 2f)
+                for (float y = minY; y <= maxY; y += 1.5f)
                 {
                     if (IsPointInTriangle(new Vector2(x, y), p1, p2, p3))
                     {
-                        spriteBatch.Draw(pixelTexture, new Vector2(x, y), color);
+                        spriteBatch.Draw(_pixelTexture, new Vector2(x, y), color);
                     }
                 }
             }

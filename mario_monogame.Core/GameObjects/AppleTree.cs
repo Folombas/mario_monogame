@@ -16,6 +16,7 @@ namespace mario_monogame.Core.GameObjects
         private readonly List<Apple> _apples;
         private readonly List<Leaf> _leaves;
         private readonly List<Branch> _branches;
+        private Texture2D _pixelTexture;
 
         public Vector2 Position => _position;
 
@@ -24,6 +25,10 @@ namespace mario_monogame.Core.GameObjects
             _graphicsDevice = graphicsDevice;
             _position = position;
             _scale = scale;
+
+            // Создаём белый пиксель для отрисовки
+            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
 
             // Создаём ветви
             _branches = new List<Branch>
@@ -85,7 +90,7 @@ namespace mario_monogame.Core.GameObjects
             // Рисуем ветви
             foreach (var branch in _branches)
             {
-                branch.Draw(spriteBatch, _position);
+                branch.Draw(spriteBatch, _position, _pixelTexture);
             }
 
             // Рисуем листья (сначала задний план)
@@ -114,46 +119,17 @@ namespace mario_monogame.Core.GameObjects
             float trunkWidth = 20 * _scale;
             float trunkHeight = 80 * _scale;
 
-            using var trunkTexture = new Texture2D(_graphicsDevice, 1, 1);
-            trunkTexture.SetData(new[] { new Color(101, 67, 33) });
-
             // Основной ствол
             spriteBatch.Draw(
-                trunkTexture,
+                _pixelTexture,
                 new Rectangle(
                     (int)(_position.X - trunkWidth / 2),
                     (int)(_position.Y - trunkHeight),
                     (int)trunkWidth,
                     (int)trunkHeight
                 ),
-                Color.White
+                new Color(139, 90, 43)
             );
-
-            // Детали ствола (текстура коры)
-            for (int i = 0; i < 5; i++)
-            {
-                float noise = GetNoise(i, 0);
-                byte barkColor = (byte)(80 + noise * 30);
-                trunkTexture.SetData(new[] { new Color(barkColor, (byte)(50 + noise * 20), (byte)(20 + noise * 10)) });
-
-                spriteBatch.Draw(
-                    trunkTexture,
-                    new Rectangle(
-                        (int)(_position.X - trunkWidth / 2 + 3),
-                        (int)(_position.Y - trunkHeight + i * 15 * _scale),
-                        (int)(trunkWidth - 6),
-                        (int)(8 * _scale)
-                    ),
-                    Color.White
-                );
-            }
-        }
-
-        private float GetNoise(int x, int y)
-        {
-            int hash = x * 73856093 ^ y * 19349663;
-            hash = (hash >> 13) ^ hash;
-            return ((hash * 15731 + 789221) & 0x7FFFFFFF) / (float)0x7FFFFFFF;
         }
     }
 
@@ -173,7 +149,7 @@ namespace mario_monogame.Core.GameObjects
             _scale = scale;
         }
 
-        public void Draw(SpriteBatch spriteBatch, Vector2 treePosition)
+        public void Draw(SpriteBatch spriteBatch, Vector2 treePosition, Texture2D pixelTexture)
         {
             Vector2 startPos = treePosition + _start * _scale;
             Vector2 endPos = treePosition + _end * _scale;
@@ -182,18 +158,15 @@ namespace mario_monogame.Core.GameObjects
             float length = direction.Length();
             float angle = (float)Math.Atan2(direction.Y, direction.X);
 
-            using var branchTexture = new Texture2D(spriteBatch.GraphicsDevice, 1, 1);
-            branchTexture.SetData(new[] { new Color(101, 67, 33) });
-
             float thickness = 8 * _scale;
             spriteBatch.Draw(
-                branchTexture,
+                pixelTexture,
                 startPos,
                 null,
                 new Color(139, 90, 43),
                 angle,
                 Vector2.Zero,
-                new Vector2(length, thickness / length),
+                new Vector2(length, thickness),
                 SpriteEffects.None,
                 0f
             );
@@ -210,6 +183,7 @@ namespace mario_monogame.Core.GameObjects
         private readonly float _scale;
         private float _swayAngle;
         private float _swayTime;
+        private Texture2D _pixelTexture;
 
         public Leaf(GraphicsDevice graphicsDevice, Vector2 position, float scale)
         {
@@ -217,6 +191,9 @@ namespace mario_monogame.Core.GameObjects
             _position = position;
             _scale = scale;
             _swayTime = 0f;
+
+            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
         }
 
         public void Update(GameTime gameTime)
@@ -236,61 +213,37 @@ namespace mario_monogame.Core.GameObjects
             float leafWidth = 15 * _scale;
             float leafHeight = 25 * _scale;
 
-            // Рисуем листок из нескольких частей
-            using var pixelTexture = new Texture2D(_graphicsDevice, 1, 1);
-
-            // Основная часть листа
-            for (int y = 0; y < leafHeight; y++)
-            {
-                float widthAtY = leafWidth * (1 - (float)Math.Pow((y - leafHeight / 2) / (leafHeight / 2), 2));
-                
-                for (int x = 0; x < widthAtY; x++)
-                {
-                    float offsetX = x - widthAtY / 2;
-                    float noise = GetNoise((int)(_position.X + offsetX), (int)(_position.Y + y));
-                    
-                    Color leafColor = new Color(
-                        (byte)(34 + noise * 30),
-                        (byte)(139 + noise * 40),
-                        (byte)(34 + noise * 20)
-                    );
-
-                    pixelTexture.SetData(new[] { leafColor });
-                    
-                    spriteBatch.Draw(
-                        pixelTexture,
-                        new Vector2(_position.X + offsetX, _position.Y + y - leafHeight / 2),
-                        null,
-                        leafColor,
-                        _swayAngle,
-                        Vector2.Zero,
-                        1f,
-                        SpriteEffects.None,
-                        0f
-                    );
-                }
-            }
-
-            // Прожилка листа
-            pixelTexture.SetData(new[] { new Color(60, 100, 40) });
-            spriteBatch.Draw(
-                pixelTexture,
-                _position,
-                null,
-                new Color(60, 100, 40),
-                _swayAngle,
-                new Vector2(0.5f, 0f),
-                new Vector2(1, leafHeight),
-                SpriteEffects.None,
-                0f
-            );
+            // Рисуем листок как эллипс
+            DrawEllipse(spriteBatch, _position, leafWidth, leafHeight, new Color(34, 139, 34), _swayAngle);
         }
 
-        private float GetNoise(int x, int y)
+        private void DrawEllipse(SpriteBatch spriteBatch, Vector2 center, float width, float height, Color color, float rotation)
         {
-            int hash = x * 73856093 ^ y * 19349663;
-            hash = (hash >> 13) ^ hash;
-            return ((hash * 15731 + 789221) & 0x7FFFFFFF) / (float)0x7FFFFFFF;
+            for (float y = -height / 2; y <= height / 2; y += 1.5f)
+            {
+                for (float x = -width / 2; x <= width / 2; x += 1.5f)
+                {
+                    if ((x * x) / (width / 2 * width / 2) + (y * y) / (height / 2 * height / 2) <= 1)
+                    {
+                        Vector2 rotatedPoint = RotatePoint(new Vector2(x, y), center, rotation);
+                        spriteBatch.Draw(_pixelTexture, rotatedPoint, color);
+                    }
+                }
+            }
+        }
+
+        private Vector2 RotatePoint(Vector2 point, Vector2 center, float angle)
+        {
+            float cos = (float)Math.Cos(angle);
+            float sin = (float)Math.Sin(angle);
+
+            float dx = point.X - center.X;
+            float dy = point.Y - center.Y;
+
+            return new Vector2(
+                center.X + dx * cos - dy * sin,
+                center.Y + dx * sin + dy * cos
+            );
         }
     }
 
@@ -304,6 +257,7 @@ namespace mario_monogame.Core.GameObjects
         private readonly float _scale;
         private float _swingAngle;
         private float _swingTime;
+        private Texture2D _pixelTexture;
 
         public Apple(GraphicsDevice graphicsDevice, Vector2 position, float scale)
         {
@@ -311,6 +265,9 @@ namespace mario_monogame.Core.GameObjects
             _position = position;
             _scale = scale;
             _swingTime = 0f;
+
+            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
         }
 
         public void Update(GameTime gameTime)
@@ -335,41 +292,14 @@ namespace mario_monogame.Core.GameObjects
 
         private void DrawAppleBody(SpriteBatch spriteBatch, float radius)
         {
-            int segments = 24;
-
-            for (int i = 0; i < segments; i++)
-            {
-                double angle1 = i * Math.PI * 2 / segments;
-                double angle2 = (i + 1) * Math.PI * 2 / segments;
-
-                Vector2 point1 = new Vector2(
-                    _position.X + (float)Math.Cos(angle1) * radius,
-                    _position.Y + (float)Math.Sin(angle1) * radius
-                );
-                Vector2 point2 = new Vector2(
-                    _position.X + (float)Math.Cos(angle2) * radius,
-                    _position.Y + (float)Math.Sin(angle2) * radius
-                );
-
-                // Градиент красного цвета для объёма
-                float brightness = 0.7f + 0.3f * (float)Math.Sin(angle1 + Math.PI / 2);
-                Color appleColor = new Color(
-                    (byte)(200 * brightness),
-                    (byte)(30 * brightness),
-                    (byte)(30 * brightness)
-                );
-
-                DrawFilledTriangle(spriteBatch, _position, point1, point2, appleColor);
-            }
+            // Рисуем яблоко как красный круг
+            DrawCircle(spriteBatch, _position, radius, new Color(220, 20, 60));
         }
 
         private void DrawStem(SpriteBatch spriteBatch, float radius)
         {
-            using var stemTexture = new Texture2D(_graphicsDevice, 1, 1);
-            stemTexture.SetData(new[] { new Color(101, 67, 33) });
-
             spriteBatch.Draw(
-                stemTexture,
+                _pixelTexture,
                 new Vector2(_position.X, _position.Y - radius),
                 null,
                 new Color(101, 67, 33),
@@ -383,14 +313,11 @@ namespace mario_monogame.Core.GameObjects
 
         private void DrawHighlight(SpriteBatch spriteBatch, float radius)
         {
-            using var highlightTexture = new Texture2D(_graphicsDevice, 1, 1);
-            highlightTexture.SetData(new[] { Color.White });
-
             spriteBatch.Draw(
-                highlightTexture,
+                _pixelTexture,
                 _position + new Vector2(-radius * 0.3f, -radius * 0.3f),
                 null,
-                new Color(255, 255, 255, 180),
+                new Color(255, 255, 255, 200),
                 0f,
                 Vector2.Zero,
                 radius * 0.25f,
@@ -399,15 +326,34 @@ namespace mario_monogame.Core.GameObjects
             );
         }
 
-        private void DrawFilledTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
+        private void DrawCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
+        {
+            int segments = 36;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float angle1 = (float)(i * Math.PI * 2 / segments);
+                float angle2 = (float)((i + 1) * Math.PI * 2 / segments);
+
+                Vector2 point1 = new Vector2(
+                    center.X + (float)Math.Cos(angle1) * radius,
+                    center.Y + (float)Math.Sin(angle1) * radius
+                );
+                Vector2 point2 = new Vector2(
+                    center.X + (float)Math.Cos(angle2) * radius,
+                    center.Y + (float)Math.Sin(angle2) * radius
+                );
+
+                DrawTriangle(spriteBatch, center, point1, point2, color);
+            }
+        }
+
+        private void DrawTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
         {
             float minX = Math.Min(p1.X, Math.Min(p2.X, p3.X));
             float maxX = Math.Max(p1.X, Math.Max(p2.X, p3.X));
             float minY = Math.Min(p1.Y, Math.Min(p2.Y, p3.Y));
             float maxY = Math.Max(p1.Y, Math.Max(p2.Y, p3.Y));
-
-            using var pixelTexture = new Texture2D(_graphicsDevice, 1, 1);
-            pixelTexture.SetData(new[] { color });
 
             for (float x = minX; x <= maxX; x += 1.5f)
             {
@@ -415,17 +361,7 @@ namespace mario_monogame.Core.GameObjects
                 {
                     if (IsPointInTriangle(new Vector2(x, y), p1, p2, p3))
                     {
-                        spriteBatch.Draw(
-                            pixelTexture,
-                            new Vector2(x, y),
-                            null,
-                            color,
-                            _swingAngle,
-                            Vector2.Zero,
-                            1f,
-                            SpriteEffects.None,
-                            0f
-                        );
+                        spriteBatch.Draw(_pixelTexture, new Vector2(x, y), color);
                     }
                 }
             }

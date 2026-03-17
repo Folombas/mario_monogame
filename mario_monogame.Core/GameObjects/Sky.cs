@@ -83,6 +83,7 @@ namespace mario_monogame.Core.GameObjects
         public void Dispose()
         {
             _gradientTexture?.Dispose();
+            _sun?.Dispose();
         }
     }
 }

@@ -12,8 +12,9 @@ namespace mario_monogame.Core.GameObjects
         private readonly int _screenWidth;
         private readonly int _screenHeight;
         private readonly int _groundHeight;
+        private Texture2D _grassTexture;
         private Texture2D _dirtTexture;
-        private Texture2D _grassTopTexture;
+        private Texture2D _pixelTexture;
 
         public int GroundHeight => _groundHeight;
 
@@ -24,13 +25,17 @@ namespace mario_monogame.Core.GameObjects
             _screenHeight = screenHeight;
             _groundHeight = groundHeight;
 
+            // Создаём белый пиксель для отрисовки
+            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
+
             CreateGroundTextures();
         }
 
         private void CreateGroundTextures()
         {
             // Создаём текстуру травы (верхний слой)
-            _grassTopTexture = new Texture2D(_graphicsDevice, _screenWidth, 30);
+            _grassTexture = new Texture2D(_graphicsDevice, _screenWidth, 30);
             Color[] grassTopPixels = new Color[_screenWidth * 30];
 
             for (int y = 0; y < 30; y++)
@@ -38,21 +43,22 @@ namespace mario_monogame.Core.GameObjects
                 for (int x = 0; x < _screenWidth; x++)
                 {
                     int index = y * _screenWidth + x;
-                    
+
                     // Создаём эффект травы с неровным верхним краем
                     float noise = GetNoise(x, y);
-                    
+
                     if (y < 5 + noise * 3)
                     {
                         // Отдельные травинки наверху
-                        grassTopPixels[index] = new Color(100 + (byte)(noise * 50), 180, 50, 255);
+                        byte r = (byte)(100 + noise * 50);
+                        grassTopPixels[index] = new Color(r, (byte)180, (byte)50, (byte)255);
                     }
                     else if (y < 15)
                     {
                         // Основная зелёная часть травы
                         byte green = (byte)(140 + noise * 40);
                         byte red = (byte)(80 + noise * 30);
-                        grassTopPixels[index] = new Color(red, green, 40);
+                        grassTopPixels[index] = new Color(red, green, (byte)40);
                     }
                     else
                     {
@@ -65,7 +71,7 @@ namespace mario_monogame.Core.GameObjects
                     }
                 }
             }
-            _grassTopTexture.SetData(grassTopPixels);
+            _grassTexture.SetData(grassTopPixels);
 
             // Создаём текстуру земли (нижний слой)
             _dirtTexture = new Texture2D(_graphicsDevice, _screenWidth, _groundHeight - 30);
@@ -77,13 +83,13 @@ namespace mario_monogame.Core.GameObjects
                 {
                     int index = y * _screenWidth + x;
                     float noise = GetNoise(x * 3, y * 3);
-                    
+
                     // Коричневая земля с текстурой
                     byte baseBrown = (byte)(101 + noise * 30);
                     byte dirtR = (byte)(baseBrown + 20);
                     byte dirtG = (byte)(67 + noise * 20);
                     byte dirtB = (byte)(33 + noise * 10);
-                    
+
                     dirtPixels[index] = new Color(dirtR, dirtG, dirtB);
                 }
             }
@@ -106,7 +112,7 @@ namespace mario_monogame.Core.GameObjects
             spriteBatch.Draw(_dirtTexture, new Vector2(0, groundY + 30), Color.White);
 
             // Рисуем траву сверху
-            spriteBatch.Draw(_grassTopTexture, new Vector2(0, groundY), Color.White);
+            spriteBatch.Draw(_grassTexture, new Vector2(0, groundY), Color.White);
 
             // Рисуем декоративные травинки по верхнему краю
             DrawGrassBlades(spriteBatch, groundY);
@@ -114,9 +120,6 @@ namespace mario_monogame.Core.GameObjects
 
         private void DrawGrassBlades(SpriteBatch spriteBatch, int groundY)
         {
-            using var bladeTexture = new Texture2D(_graphicsDevice, 1, 1);
-            bladeTexture.SetData(new[] { Color.Green });
-
             for (int x = 0; x < _screenWidth; x += 8)
             {
                 float noise = GetNoise(x, 0);
@@ -124,7 +127,7 @@ namespace mario_monogame.Core.GameObjects
                 float angle = (noise - 0.5f) * 0.3f;
 
                 spriteBatch.Draw(
-                    bladeTexture,
+                    _pixelTexture,
                     new Vector2(x, groundY),
                     null,
                     new Color(50, 150, 30),
@@ -139,8 +142,9 @@ namespace mario_monogame.Core.GameObjects
 
         public void Dispose()
         {
-            _grassTopTexture?.Dispose();
+            _grassTexture?.Dispose();
             _dirtTexture?.Dispose();
+            _pixelTexture?.Dispose();
         }
     }
 }
