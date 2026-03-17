@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="mario_monogame.Android/mario_monogame.Android.csproj" />
+  <Project Path="mario_monogame.Core/mario_monogame.Core.csproj" />
+  <Project Path="mario_monogame.DesktopGL/mario_monogame.DesktopGL.csproj" />
+  <Project Path="mario_monogame.iOS/mario_monogame.iOS.csproj" />
+  <Project Path="mario_monogame.WindowsDX/mario_monogame.WindowsDX.csproj" />
+</Solution>
