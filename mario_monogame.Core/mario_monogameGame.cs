@@ -108,8 +108,8 @@ namespace mario_monogame.Core
             // Создаём грядки с морковками
             carrotPatches = new List<CarrotPatch>
             {
-                new CarrotPatch(GraphicsDevice, new Vector2(400, screenHeight - 100), 1f, 8),
-                new CarrotPatch(GraphicsDevice, new Vector2(750, screenHeight - 100), 1f, 8),
+                new CarrotPatch(GraphicsDevice, new Vector2(400, screenHeight - 120), 1f, 8),
+                new CarrotPatch(GraphicsDevice, new Vector2(750, screenHeight - 120), 1f, 8),
             };
         }
 
@@ -164,14 +164,14 @@ namespace mario_monogame.Core
                 tree.Draw(spriteBatch);
             }
 
-            // Рисуем грядки с морковками
+            // Рисуем землю с зелёной лужайкой
+            ground.Draw(spriteBatch);
+
+            // Рисуем грядки с морковками (поверх земли)
             foreach (var carrotPatch in carrotPatches)
             {
                 carrotPatch.Draw(spriteBatch);
             }
-
-            // Рисуем землю с зелёной лужайкой
-            ground.Draw(spriteBatch);
 
             spriteBatch.End();
 
