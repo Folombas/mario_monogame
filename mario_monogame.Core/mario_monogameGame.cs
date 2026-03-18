@@ -1,5 +1,7 @@
 using mario_monogame.Core.GameObjects;
 using mario_monogame.Core.Localization;
+using mario_monogame.Core.UI;
+using mario_monogame.Core.Audio;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -30,6 +32,14 @@ namespace mario_monogame.Core
         private House rabbitHouse;
         private ParticleSystem particleSystem;
         
+        // Новые системы
+        private DayNightCycle dayNightCycle;
+        private WeatherSystem weatherSystem;
+        private List<Fox> foxes;
+        private List<Crow> crows;
+        private MainMenu mainMenu;
+        private SoundManager soundManager;
+        
         // Состояние игры
         private GameState gameState;
         private int score;
@@ -43,6 +53,9 @@ namespace mario_monogame.Core
         // Камера
         private Vector2 cameraPosition;
         private float cameraTargetX;
+        
+        // Для меню
+        private KeyboardState previousKeyboardState;
 
         /// <summary>
         /// Indicates if the game is running on a mobile platform.
@@ -76,13 +89,14 @@ namespace mario_monogame.Core
             graphicsDeviceManager.PreferredBackBufferHeight = 720;
             
             // Инициализация состояния
-            gameState = GameState.Playing;
+            gameState = GameState.Menu;  // Начинаем с меню
             score = 0;
             carrotsInHouse = 0;
             currentLevel = 1;
             gameTimeTotal = 0f;
             cameraPosition = Vector2.Zero;
             cameraTargetX = 0f;
+            previousKeyboardState = Keyboard.GetState();
         }
 
         /// <summary>
@@ -121,6 +135,9 @@ namespace mario_monogame.Core
 
             // Создаём небо с солнцем и облаками
             sky = new Sky(GraphicsDevice, screenWidth, screenHeight);
+            
+            // Создаём систему смены дня и ночи
+            dayNightCycle = new DayNightCycle(GraphicsDevice, dayDurationSeconds: 120f);
 
             // Создаём землю с зелёной лужайкой
             ground = new Ground(GraphicsDevice, screenWidth, screenHeight, 150);
@@ -142,12 +159,24 @@ namespace mario_monogame.Core
             {
                 particleSystem.SetFont(font);
             }
+            
+            // Создаём менеджер звука
+            soundManager = new SoundManager(Content);
+            // Звуки будут загружены когда добавим файлы
+            
+            // Создаём главное меню
+            mainMenu = new MainMenu(GraphicsDevice);
+            mainMenu.LoadContent(Content);
+            mainMenu.OnItemSelected += HandleMenuSelection;
 
             // Создаём домик зайчика слева
             rabbitHouse = new House(GraphicsDevice, new Vector2(150, screenHeight - 150), 1f);
 
             // Создаём зайчика рядом с домиком
             rabbit = new Rabbit(GraphicsDevice, new Vector2(300, screenHeight - 150), screenHeight - 150);
+            
+            // Создаём систему погоды
+            weatherSystem = new WeatherSystem(GraphicsDevice, particleSystem);
 
             // Создаём деревья с яблоками
             trees = new List<AppleTree>
@@ -164,14 +193,24 @@ namespace mario_monogame.Core
                 new CarrotPatch(GraphicsDevice, new Vector2(1100, screenHeight - 120), 1f, 8),
                 new CarrotPatch(GraphicsDevice, new Vector2(1500, screenHeight - 120), 1f, 8),
             };
+            
+            // Создаём врагов
+            foxes = new List<Fox>
+            {
+                new Fox(GraphicsDevice, new Vector2(800, screenHeight - 150), screenHeight - 150, 600, 1000),
+                new Fox(GraphicsDevice, new Vector2(1400, screenHeight - 150), screenHeight - 150, 1200, 1600),
+            };
+            
+            crows = new List<Crow>
+            {
+                new Crow(GraphicsDevice, new Vector2(600, 200), 100, 150),
+                new Crow(GraphicsDevice, new Vector2(1200, 180), 120, 130),
+            };
         }
 
         /// <summary>
         /// Updates the game's logic, called once per frame.
         /// </summary>
-        /// <param name="gameTime">
-        /// Provides a snapshot of timing values used for game updates.
-        /// </param>
         protected override void Update(GameTime gameTime)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -183,8 +222,13 @@ namespace mario_monogame.Core
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed
                 || keyboardState.IsKeyDown(Keys.Escape))
                 Exit();
-                
-            if (gameState == GameState.Playing)
+            
+            // Обновляем главное меню
+            if (gameState == GameState.Menu)
+            {
+                mainMenu.Update(gameTime, keyboardState, previousKeyboardState);
+            }
+            else if (gameState == GameState.Playing)
             {
                 // Обновляем зайчика
                 rabbit.Update(gameTime, keyboardState, 2000);
@@ -199,11 +243,31 @@ namespace mario_monogame.Core
                 // Обновляем систему частиц
                 particleSystem.Update(gameTime);
                 
+                // Обновляем цикл дня и ночи
+                dayNightCycle.Update(gameTime);
+                
+                // Обновляем погоду
+                weatherSystem.Update(gameTime, cameraPosition);
+                
+                // Обновляем врагов
+                foreach (var fox in foxes)
+                {
+                    fox.Update(gameTime, rabbit.Position);
+                }
+                
+                foreach (var crow in crows)
+                {
+                    crow.Update(gameTime);
+                }
+                
                 // Проверяем взаимодействие с морковкой
                 CheckCarrotCollection();
                 
                 // Проверяем взаимодействие с домиком
                 CheckHouseInteraction(keyboardState);
+                
+                // Проверяем столкновения с врагами
+                CheckEnemyCollisions();
                 
                 // Обновляем деревья
                 foreach (var tree in trees)
@@ -220,8 +284,28 @@ namespace mario_monogame.Core
             
             // Обновляем небо
             sky.Update(gameTime);
+            
+            previousKeyboardState = keyboardState;
 
             base.Update(gameTime);
+        }
+        
+        private void HandleMenuSelection(int selectedIndex)
+        {
+            switch (selectedIndex)
+            {
+                case 0: // Играть
+                    gameState = GameState.Playing;
+                    mainMenu.Visible = false;
+                    soundManager?.PlayBackgroundMusic();
+                    break;
+                case 1: // Настройки
+                    // TODO: Открыть настройки
+                    break;
+                case 2: // Выход
+                    Exit();
+                    break;
+            }
         }
         
         private void CheckCarrotCollection()
@@ -236,6 +320,7 @@ namespace mario_monogame.Core
                     score += 10;
                     particleSystem.EmitCarrotCollectEffect(rabbit.Position);
                     particleSystem.EmitFloatingText("+10", rabbit.Position - new Vector2(0, 30), Color.Yellow);
+                    soundManager?.PlayCollectSound();
                 }
             }
         }
@@ -256,13 +341,44 @@ namespace mario_monogame.Core
                     rabbitHouse.EmitSmokeEffect();
                     particleSystem.EmitHeartEffect(rabbit.Position);
                     particleSystem.EmitFloatingText("+25", rabbit.Position - new Vector2(0, 30), Color.Lime);
+                    soundManager?.PlayDepositSound();
                     
                     // Проверка уровня
                     if (carrotsInHouse >= currentLevel * 5)
                     {
                         currentLevel++;
                         particleSystem.EmitFloatingText($"Уровень {currentLevel}!", rabbit.Position - new Vector2(0, 60), Color.Gold);
+                        soundManager?.PlayLevelUpSound();
                     }
+                }
+            }
+        }
+        
+        private void CheckEnemyCollisions()
+        {
+            // Проверка столкновений с лисами
+            foreach (var fox in foxes)
+            {
+                float distance = Vector2.Distance(rabbit.Position, fox.Position);
+                if (distance < fox.InteractionRadius)
+                {
+                    // Отталкиваем зайчика
+                    float pushDirection = Math.Sign(rabbit.Position.X - fox.Position.X);
+                    rabbit = new Rabbit(GraphicsDevice, new Vector2(fox.Position.X + pushDirection * 100, rabbit.Position.Y), rabbit.Position.Y);
+                    score = Math.Max(0, score - 5);
+                    particleSystem.EmitFloatingText("-5", rabbit.Position - new Vector2(0, 30), Color.Red);
+                    soundManager?.PlayHitSound();
+                }
+            }
+            
+            // Проверка столкновений с воронами
+            foreach (var crow in crows)
+            {
+                float distance = Vector2.Distance(rabbit.Position, crow.Position);
+                if (distance < crow.InteractionRadius)
+                {
+                    // Ворона мешает, но не отнимает очки
+                    particleSystem.EmitFloatingText("Кар!", crow.Position, Color.Gray);
                 }
             }
         }
@@ -270,50 +386,74 @@ namespace mario_monogame.Core
         /// <summary>
         /// Draws the game's graphics, called once per frame.
         /// </summary>
-        /// <param name="gameTime">
-        /// Provides a snapshot of timing values used for rendering.
-        /// </param>
         protected override void Draw(GameTime gameTime)
         {
             // Очищаем экран голубым цветом неба
             GraphicsDevice.Clear(new Color(135, 206, 235));
 
-            spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, 
-                Matrix.CreateTranslation(-cameraPosition.X, -cameraPosition.Y, 0));
-
-            // Рисуем небо с солнцем и облаками
-            sky.Draw(spriteBatch);
-
-            // Рисуем деревья (на заднем плане)
-            foreach (var tree in trees)
+            if (gameState == GameState.Menu)
             {
-                tree.Draw(spriteBatch);
+                // Рисуем только меню
+                spriteBatch.Begin();
+                mainMenu.Draw(spriteBatch);
+                spriteBatch.End();
             }
-
-            // Рисуем землю с зелёной лужайкой
-            ground.Draw(spriteBatch);
-            
-            // Рисуем домик
-            rabbitHouse.Draw(spriteBatch);
-
-            // Рисуем грядки с морковками (поверх земли)
-            foreach (var carrotPatch in carrotPatches)
+            else if (gameState == GameState.Playing)
             {
-                carrotPatch.Draw(spriteBatch);
-            }
-            
-            // Рисуем зайчика
-            rabbit.Draw(spriteBatch);
-            
-            // Рисуем систему частиц
-            particleSystem.Draw(spriteBatch);
+                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, 
+                    Matrix.CreateTranslation(-cameraPosition.X, -cameraPosition.Y, 0));
 
-            spriteBatch.End();
-            
-            // Рисуем UI (без камеры)
-            spriteBatch.Begin();
-            DrawUI();
-            spriteBatch.End();
+                // Рисуем небо с солнцем и облаками
+                sky.Draw(spriteBatch);
+                
+                // Рисуем цикл дня и ночи
+                dayNightCycle.Draw(spriteBatch);
+                
+                // Рисуем погоду
+                weatherSystem.Draw(spriteBatch);
+
+                // Рисуем деревья (на заднем плане)
+                foreach (var tree in trees)
+                {
+                    tree.Draw(spriteBatch);
+                }
+
+                // Рисуем землю с зелёной лужайкой
+                ground.Draw(spriteBatch);
+                
+                // Рисуем домик
+                rabbitHouse.Draw(spriteBatch);
+
+                // Рисуем грядки с морковками (поверх земли)
+                foreach (var carrotPatch in carrotPatches)
+                {
+                    carrotPatch.Draw(spriteBatch);
+                }
+                
+                // Рисуем врагов
+                foreach (var fox in foxes)
+                {
+                    fox.Draw(spriteBatch);
+                }
+                
+                foreach (var crow in crows)
+                {
+                    crow.Draw(spriteBatch);
+                }
+                
+                // Рисуем зайчика
+                rabbit.Draw(spriteBatch);
+                
+                // Рисуем систему частиц
+                particleSystem.Draw(spriteBatch);
+
+                spriteBatch.End();
+                
+                // Рисуем UI (без камеры)
+                spriteBatch.Begin();
+                DrawUI();
+                spriteBatch.End();
+            }
 
             base.Draw(gameTime);
         }
@@ -363,11 +503,25 @@ namespace mario_monogame.Core
                 rabbit?.Dispose();
                 rabbitHouse?.Dispose();
                 particleSystem?.Dispose();
+                dayNightCycle?.Dispose();
+                weatherSystem?.Dispose();
+                mainMenu?.Dispose();
+                soundManager?.Dispose();
                 spriteBatch?.Dispose();
 
                 foreach (var tree in trees)
                 {
                     // AppleTree не реализует IDisposable, но его листья и яблоки имеют текстуры
+                }
+                
+                foreach (var fox in foxes)
+                {
+                    fox?.Dispose();
+                }
+                
+                foreach (var crow in crows)
+                {
+                    crow?.Dispose();
                 }
 
                 foreach (var carrotPatch in carrotPatches)
