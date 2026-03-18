@@ -246,21 +246,24 @@ namespace mario_monogame.Core
                 // Обновляем зайчика
                 rabbit.Update(gameTime, keyboardState, 2000);
                 
-                // Обновляем камеру (следует за зайчиком)
+                // Обновляем камеру (следует за зайчиком с плавностью)
                 cameraTargetX = MathHelper.Clamp(rabbit.Position.X - 640, 0, 1000);
-                cameraPosition.X = MathHelper.Lerp(cameraPosition.X, cameraTargetX, elapsed * 5f);
-                
+                cameraPosition.X = MathHelper.Lerp(cameraPosition.X, cameraTargetX, elapsed * 3f);
+
                 // Обновляем домик
                 rabbitHouse.Update(gameTime);
-                
+
                 // Обновляем систему частиц
                 particleSystem.Update(gameTime);
-                
+
                 // Обновляем цикл дня и ночи
                 dayNightCycle.Update(gameTime);
-                
+
                 // Обновляем погоду
                 weatherSystem.Update(gameTime, cameraPosition);
+                
+                // Обновляем небо с учётом камеры
+                sky.Update(gameTime, cameraPosition.X);
                 
                 // Обновляем врагов
                 foreach (var fox in foxes)
@@ -294,10 +297,10 @@ namespace mario_monogame.Core
                     carrotPatch.Update(gameTime);
                 }
             }
-            
+
             // Обновляем небо
-            sky.Update(gameTime);
-            
+            sky.Update(gameTime, cameraPosition.X);
+
             previousKeyboardState = keyboardState;
 
             base.Update(gameTime);
@@ -418,7 +421,7 @@ namespace mario_monogame.Core
                 spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, transformMatrix: transformMatrix);
 
                 // Рисуем небо с солнцем и облаками
-                sky.Draw(spriteBatch);
+                sky.Draw(spriteBatch, cameraPosition.X);
                 
                 // Рисуем цикл дня и ночи
                 dayNightCycle.Draw(spriteBatch);
