@@ -421,8 +421,18 @@ namespace mario_monogame.Core
             }
             else if (gameState == GameState.Playing)
             {
-                spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, null, null, null, null, 
-                    Matrix.CreateTranslation(-cameraPosition.X, -cameraPosition.Y, 0));
+                // Создаём матрицу трансформации для камеры
+                Matrix transformMatrix = Matrix.CreateTranslation(-cameraPosition.X, -cameraPosition.Y, 0);
+                
+                spriteBatch.Begin(
+                    SpriteSortMode.Deferred,
+                    BlendState.AlphaBlend,
+                    SamplerState.LinearClamp,
+                    DepthStencilState.None,
+                    RasterizerState.CullCounterClockwise,
+                    null,
+                    transformMatrix
+                );
 
                 // Рисуем небо с солнцем и облаками
                 sky.Draw(spriteBatch);
