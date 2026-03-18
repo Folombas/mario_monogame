@@ -17,6 +17,8 @@ namespace mario_monogame.Core.GameObjects
         private Texture2D _pixelTexture;
         private Texture2D _soilTexture;
 
+        public Vector2 Position => _position;
+
         public CarrotPatch(GraphicsDevice graphicsDevice, Vector2 position, float scale = 1f, int carrotCount = 8)
         {
             _graphicsDevice = graphicsDevice;
