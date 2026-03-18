@@ -427,9 +427,9 @@ namespace mario_monogame.Core
                 spriteBatch.Begin(
                     SpriteSortMode.Deferred,
                     BlendState.AlphaBlend,
-                    SamplerState.LinearClamp,
-                    DepthStencilState.None,
-                    RasterizerState.CullCounterClockwise,
+                    null,
+                    null,
+                    null,
                     null,
                     transformMatrix
                 );
