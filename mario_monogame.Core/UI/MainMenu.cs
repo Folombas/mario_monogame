@@ -61,9 +61,9 @@ namespace mario_monogame.Core.UI
             // Создаём пункты меню
             _menuItems = new List<MenuItem>
             {
-                new MenuItem("Играть", new Vector2(640, 350)),
-                new MenuItem("Настройки", new Vector2(640, 420)),
-                new MenuItem("Выход", new Vector2(640, 490))
+                new MenuItem("Play Game", new Vector2(640, 350)),
+                new MenuItem("Settings", new Vector2(640, 420)),
+                new MenuItem("Exit", new Vector2(640, 490))
             };
         }
 
@@ -144,7 +144,7 @@ namespace mario_monogame.Core.UI
         
         private void DrawTitle(SpriteBatch spriteBatch)
         {
-            string title = "🐰 Весёлая Морковка 🥕";
+            string title = "Happy Carrot";
             Vector2 titleSize = _font.MeasureString(title);
             Vector2 titlePos = new Vector2(640 - titleSize.X / 2, 100 + _titleBounce);
             
@@ -154,7 +154,7 @@ namespace mario_monogame.Core.UI
             spriteBatch.DrawString(_font, title, titlePos, new Color(255, 220, 100));
             
             // Подзаголовок
-            string subtitle = "Приключения зайчика-фермера";
+            string subtitle = "Rabbit farmer adventures";
             Vector2 subtitleSize = _font.MeasureString(subtitle);
             Vector2 subtitlePos = new Vector2(640 - subtitleSize.X / 2, 150);
             spriteBatch.DrawString(_font, subtitle, subtitlePos, Color.LightGray);
@@ -224,31 +224,31 @@ namespace mario_monogame.Core.UI
                 Color textColor = isSelected ? new Color((byte)255, (byte)220, (byte)100) : Color.White;
                 Vector2 textSize = _font.MeasureString(item.Text);
                 Vector2 textPos = new Vector2(item.Position.X - textSize.X / 2, item.Position.Y);
-                
+
                 // Маркер выбора
                 if (isSelected)
                 {
-                    string marker = "► ";
+                    string marker = "> ";
                     spriteBatch.DrawString(_font, marker, textPos - new Vector2(30, 0), textColor);
                 }
-                
+
                 spriteBatch.DrawString(_font, item.Text, textPos, textColor);
             }
         }
         
         private void DrawHints(SpriteBatch spriteBatch)
         {
-            string hint1 = "↑/↓ или W/S - навигация";
-            string hint2 = "Enter или Пробел - выбор";
-            
+            string hint1 = "Up/Down or W/S - Navigate";
+            string hint2 = "Enter or Space - Select";
+
             Vector2 hint1Size = _font.MeasureString(hint1);
             Vector2 hint2Size = _font.MeasureString(hint2);
-            
+
             spriteBatch.DrawString(_font, hint1, new Vector2(640 - hint1Size.X / 2, 600), Color.Gray);
             spriteBatch.DrawString(_font, hint2, new Vector2(640 - hint2Size.X / 2, 630), Color.Gray);
-            
+
             // Копирайт
-            string copyright = "© 2024 Mario Monogame";
+            string copyright = "2024 Mario Monogame";
             Vector2 copyrightSize = _font.MeasureString(copyright);
             spriteBatch.DrawString(_font, copyright, new Vector2(640 - copyrightSize.X / 2, 690), new Color(100, 100, 100));
         }

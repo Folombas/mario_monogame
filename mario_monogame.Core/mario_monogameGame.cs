@@ -407,17 +407,9 @@ namespace mario_monogame.Core
             if (gameState == GameState.Menu)
             {
                 // Рисуем только меню
-                try
-                {
-                    spriteBatch.Begin();
-                    mainMenu?.Draw(spriteBatch);
-                    spriteBatch.End();
-                }
-                catch
-                {
-                    // Если ошибка при рисовании меню, переходим к игре
-                    gameState = GameState.Playing;
-                }
+                spriteBatch.Begin();
+                mainMenu?.Draw(spriteBatch);
+                spriteBatch.End();
             }
             else if (gameState == GameState.Playing)
             {
@@ -485,17 +477,17 @@ namespace mario_monogame.Core
             if (font == null) return;
             
             // Счёт
-            string scoreText = $"Очки: {score}";
+            string scoreText = $"Score: {score}";
             spriteBatch.DrawString(font, scoreText, new Vector2(15, 15), Color.Black);
             spriteBatch.DrawString(font, scoreText, new Vector2(13, 13), Color.White);
             
             // Морковки в домике
-            string carrotsText = $"В домике: {carrotsInHouse}";
+            string carrotsText = $"Carrots: {carrotsInHouse}";
             spriteBatch.DrawString(font, carrotsText, new Vector2(15, 45), Color.Black);
             spriteBatch.DrawString(font, carrotsText, new Vector2(13, 43), Color.White);
             
             // Уровень
-            string levelText = $"Уровень: {currentLevel}";
+            string levelText = $"Level: {currentLevel}";
             spriteBatch.DrawString(font, levelText, new Vector2(15, 75), Color.Black);
             spriteBatch.DrawString(font, levelText, new Vector2(13, 73), Color.White);
             
@@ -503,14 +495,14 @@ namespace mario_monogame.Core
             float distanceToHouse = Vector2.Distance(rabbit.Position, rabbitHouse.Position);
             if (distanceToHouse < rabbitHouse.InteractionRadius && rabbit.HasCarrot)
             {
-                string hint = "Нажми E чтобы положить морковку";
+                string hint = "Press E to deposit carrot";
                 Vector2 hintSize = font.MeasureString(hint);
                 spriteBatch.DrawString(font, hint, new Vector2(640 - hintSize.X / 2 + 2, 650 + 2), Color.Black);
                 spriteBatch.DrawString(font, hint, new Vector2(640 - hintSize.X / 2, 650), Color.Yellow);
             }
             
             // Управление
-            string controls = "A/D - движение | Пробел - прыжок | E - взаимодействие";
+            string controls = "A/D - Move | Space - Jump | E - Interact";
             Vector2 controlsSize = font.MeasureString(controls);
             spriteBatch.DrawString(font, controls, new Vector2(640 - controlsSize.X / 2 + 2, 700 + 2), Color.Black);
             spriteBatch.DrawString(font, controls, new Vector2(640 - controlsSize.X / 2, 700), Color.White);
