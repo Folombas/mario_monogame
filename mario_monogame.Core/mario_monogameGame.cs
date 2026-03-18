@@ -166,8 +166,21 @@ namespace mario_monogame.Core
             
             // Создаём главное меню
             mainMenu = new MainMenu(GraphicsDevice);
-            mainMenu.LoadContent(Content);
-            mainMenu.OnItemSelected += HandleMenuSelection;
+            try
+            {
+                mainMenu.LoadContent(Content);
+                mainMenu.OnItemSelected += HandleMenuSelection;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки меню: {ex.Message}");
+                // Если меню не загрузилось, сразу переходим в режим игры
+                gameState = GameState.Playing;
+                if (mainMenu != null)
+                {
+                    mainMenu.Visible = false;
+                }
+            }
 
             // Создаём домик зайчика слева
             rabbitHouse = new House(GraphicsDevice, new Vector2(150, screenHeight - 150), 1f);
@@ -394,9 +407,17 @@ namespace mario_monogame.Core
             if (gameState == GameState.Menu)
             {
                 // Рисуем только меню
-                spriteBatch.Begin();
-                mainMenu.Draw(spriteBatch);
-                spriteBatch.End();
+                try
+                {
+                    spriteBatch.Begin();
+                    mainMenu?.Draw(spriteBatch);
+                    spriteBatch.End();
+                }
+                catch
+                {
+                    // Если ошибка при рисовании меню, переходим к игре
+                    gameState = GameState.Playing;
+                }
             }
             else if (gameState == GameState.Playing)
             {

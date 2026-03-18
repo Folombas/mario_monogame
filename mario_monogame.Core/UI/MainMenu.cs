@@ -46,16 +46,16 @@ namespace mario_monogame.Core.UI
         
         public void LoadContent(ContentManager content)
         {
-            _font = content.Load<SpriteFont>("Fonts/Hud");
-            
-            // Пытаемся загрузить больший шрифт для заголовка
             try
             {
-                _titleFont = content.Load<SpriteFont>("Fonts/Hud");
-            }
-            catch
-            {
+                _font = content.Load<SpriteFont>("Fonts/Hud");
                 _titleFont = _font;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки шрифта: {ex.Message}");
+                // Шрифт не загрузился, меню не будет работать
+                return;
             }
             
             // Создаём пункты меню
