@@ -5,283 +5,290 @@ using System;
 namespace mario_monogame.Core.GameObjects
 {
     /// <summary>
-    /// Лиса - враг зайчика, который бегает по земле и патрулирует территорию.
+    /// Гумба (гриб-враг) в стиле Mario.
     /// </summary>
-    public class Fox : IDisposable
+    public class Goomba : IDisposable
     {
         private readonly GraphicsDevice _graphicsDevice;
         private Vector2 _position;
         private Vector2 _velocity;
-        private readonly float _groundY;
         private Texture2D _pixelTexture;
         
-        // Патрулирование
-        private float _patrolStart;
-        private float _patrolEnd;
-        private float _moveSpeed;
-        private bool _facingRight;
-        
-        // Анимация
-        private float _walkAnimationTime;
-        private float _tailWagTime;
+        // Состояние
+        private bool _isAlive;
+        private float _squishTimer;
+        private readonly float _moveSpeed;
+        private readonly float _gravity;
         
         // Размеры
         private readonly float _width;
         private readonly float _height;
         
-        // Цвета
-        private readonly Color _furColor;
-        private readonly Color _bellyColor;
-        private readonly Color _tailTipColor;
+        // Анимация
+        private float _walkAnimationTime;
+        private bool _facingRight;
 
         public Vector2 Position => _position;
-        public float InteractionRadius => 40f;
-        public bool IsDead { get; private set; }
+        public Rectangle Bounds => new Rectangle(
+            (int)(_position.X - _width / 2),
+            (int)(_position.Y - _height / 2),
+            (int)_width,
+            (int)_height
+        );
+        public bool IsAlive => _isAlive;
 
-        public Fox(GraphicsDevice graphicsDevice, Vector2 startPosition, float groundY, float patrolStart, float patrolEnd)
+        public Goomba(GraphicsDevice graphicsDevice, Vector2 startPosition)
         {
             _graphicsDevice = graphicsDevice;
             _position = startPosition;
-            _groundY = groundY;
-            _patrolStart = patrolStart;
-            _patrolEnd = patrolEnd;
-            _moveSpeed = 80f;
-            _facingRight = true;
+            _velocity = Vector2.Zero;
             
-            _width = 60f;
-            _height = 35f;
+            _moveSpeed = 50f;
+            _gravity = 1500f;
             
-            _furColor = new Color(220, 100, 50);
-            _bellyColor = new Color(255, 200, 150);
-            _tailTipColor = Color.White;
+            _width = 32f;
+            _height = 32f;
             
             _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
             _pixelTexture.SetData(new[] { Color.White });
             
+            _isAlive = true;
+            _squishTimer = 0f;
             _walkAnimationTime = 0f;
-            _tailWagTime = 0f;
-            IsDead = false;
+            _facingRight = Random.Shared.Next(2) == 0;
         }
 
-        public void Update(GameTime gameTime, Vector2 rabbitPosition)
+        public void Update(GameTime gameTime, float groundY, Player player)
         {
-            if (IsDead) return;
-            
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
-            // Движение патрулирования
-            if (_facingRight)
+            if (!_isAlive)
             {
-                _position.X += _moveSpeed * elapsed;
-                if (_position.X >= _patrolEnd)
-                {
-                    _facingRight = false;
-                }
-            }
-            else
-            {
-                _position.X -= _moveSpeed * elapsed;
-                if (_position.X <= _patrolStart)
-                {
-                    _facingRight = true;
-                }
+                _squishTimer -= elapsed;
+                return;
             }
             
-            // Анимация ходьбы
-            _walkAnimationTime += elapsed * 8f;
-            _tailWagTime += elapsed * 5f;
+            // Движение
+            float moveDir = _facingRight ? 1f : -1f;
+            _velocity.X = moveDir * _moveSpeed;
             
-            // Проверка столкновения с зайчиком
-            float distance = Vector2.Distance(_position, rabbitPosition);
-            if (distance < InteractionRadius)
+            // Гравитация
+            _velocity.Y += _gravity * elapsed;
+            
+            // Применение
+            _position += _velocity * elapsed;
+            
+            // Проверка земли
+            if (_position.Y >= groundY)
             {
-                // Зайчик пойман!
+                _position.Y = groundY;
+                _velocity.Y = 0f;
+            }
+            
+            // Разворот на краях
+            _walkAnimationTime += elapsed * 5f;
+            
+            // Проверка столкновения с игроком
+            if (player.Bounds.Intersects(Bounds))
+            {
+                // Игрок прыгнул сверху - убиваем гумбу
+                if (player.Velocity.Y > 0 && player.Position.Y < _position.Y - 10f)
+                {
+                    Squish();
+                    player.ApplyGravity(-500f); // Отскок
+                }
+                // Иначе игрок получает урон (обрабатывается в Player)
             }
         }
 
-        public void Draw(SpriteBatch spriteBatch)
+        public void Squish()
         {
-            if (IsDead) return;
-            
-            float legOffset = (float)Math.Sin(_walkAnimationTime) * 5f;
-            float tailAngle = (float)Math.Sin(_tailWagTime) * 0.3f;
-            
-            DrawBody(spriteBatch, legOffset);
-            DrawTail(spriteBatch, tailAngle);
-            DrawHead(spriteBatch);
-            DrawLegs(spriteBatch, legOffset);
+            _isAlive = false;
+            _squishTimer = 0.3f;
         }
-        
-        private void DrawBody(SpriteBatch spriteBatch, float legOffset)
+
+        public void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
         {
-            float bodyWidth = _width * 0.7f;
-            float bodyHeight = _height * 0.6f;
+            Vector2 drawPos = _position - cameraPosition;
             
-            // Основное тело (овал)
-            DrawEllipse(spriteBatch, _position, bodyWidth, bodyHeight, _furColor, 0f);
+            if (!_isAlive)
+            {
+                // Сплюснутая версия
+                DrawSquished(spriteBatch, drawPos);
+                return;
+            }
             
-            // Брюшко (светлее)
-            DrawEllipse(spriteBatch, _position + new Vector2(0, 5f), bodyWidth * 0.6f, bodyHeight * 0.4f, _bellyColor, 0f);
-        }
-        
-        private void DrawTail(SpriteBatch spriteBatch, float angle)
-        {
-            float tailLength = 35f;
-            float tailWidth = 12f;
-            float tailX = _facingRight ? -_width * 0.3f : _width * 0.3f;
-            float direction = _facingRight ? -1f : 1f;
+            // Тело (гриб)
+            DrawCap(spriteBatch, drawPos);
             
-            // Хвост
-            Vector2 tailStart = _position + new Vector2(tailX, 0);
-            Vector2 tailEnd = tailStart + new Vector2(
-                (float)Math.Sin(angle) * tailLength * direction,
-                -(float)Math.Cos(angle) * tailLength * 0.5f
-            );
-            
-            DrawLine(spriteBatch, tailStart, tailEnd, _furColor, tailWidth);
-            
-            // Белый кончик хвоста
-            Vector2 tipPos = tailEnd;
-            DrawCircle(spriteBatch, tipPos, 6f, _tailTipColor);
-        }
-        
-        private void DrawHead(SpriteBatch spriteBatch)
-        {
-            float headSize = _height * 0.5f;
-            float headOffset = _facingRight ? headSize * 0.7f : -headSize * 0.7f;
-            
-            // Голова
-            DrawCircle(spriteBatch, _position + new Vector2(headOffset, -headSize * 0.3f), headSize, _furColor);
-            
-            // Уши
-            float earSize = 10f;
-            float earOffset = _facingRight ? 5f : -5f;
-            DrawTriangle(spriteBatch, 
-                _position + new Vector2(earOffset - 5f, -headSize * 0.8f),
-                _position + new Vector2(earOffset + 5f, -headSize * 0.8f),
-                _position + new Vector2(earOffset, -headSize * 1.2f),
-                _furColor);
-            
-            // Мордочка
-            float snoutX = _facingRight ? headOffset + headSize * 0.5f : headOffset - headSize * 0.5f;
-            DrawCircle(spriteBatch, _position + new Vector2(snoutX, -headSize * 0.1f), 8f, _bellyColor);
-            
-            // Нос
-            Color noseColor = _facingRight ? 
-                new Color((byte)(_position.X + snoutX), 50, 50) : 
-                new Color(50, 50, 50);
-            DrawCircle(spriteBatch, _position + new Vector2(snoutX + (_facingRight ? 6f : -6f), -headSize * 0.2f), 3f, Color.Black);
+            // Ножка
+            DrawStem(spriteBatch, drawPos);
             
             // Глаза
-            float eyeX = _facingRight ? headOffset + 3f : headOffset - 3f;
-            DrawCircle(spriteBatch, _position + new Vector2(eyeX, -headSize * 0.4f), 3f, Color.Black);
+            DrawEyes(spriteBatch, drawPos);
+            
+            // Ноги
+            DrawFeet(spriteBatch, drawPos);
         }
         
-        private void DrawLegs(SpriteBatch spriteBatch, float legOffset)
+        private void DrawCap(SpriteBatch spriteBatch, Vector2 position)
         {
-            float legWidth = 6f;
-            float legLength = 15f;
+            float capWidth = _width * 0.9f;
+            float capHeight = _height * 0.5f;
             
-            // Передние лапы
-            DrawLine(spriteBatch,
-                _position + new Vector2(-10f, _height * 0.2f),
-                _position + new Vector2(-10f + legOffset, _height * 0.5f),
-                _furColor, legWidth);
+            // Основная часть шляпки
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - capWidth / 2),
+                    (int)(position.Y - _height / 2),
+                    (int)capWidth,
+                    (int)capHeight
+                ),
+                new Color(140, 80, 40) // Коричневый
+            );
             
-            DrawLine(spriteBatch,
-                _position + new Vector2(10f, _height * 0.2f),
-                _position + new Vector2(10f - legOffset, _height * 0.5f),
-                _furColor, legWidth);
-        }
-
-        public void Scare()
-        {
-            // Лиса убегает
-            _moveSpeed = 200f;
-        }
-        
-        public void Kill()
-        {
-            IsDead = true;
-        }
-
-        private void DrawCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
-        {
-            DrawEllipse(spriteBatch, center, radius * 2, radius * 2, color, 0f);
-        }
-
-        private void DrawEllipse(SpriteBatch spriteBatch, Vector2 center, float width, float height, Color color, float rotation)
-        {
-            int segments = 24;
-            
-            for (int i = 0; i < segments; i++)
-            {
-                float angle1 = (float)(i * Math.PI * 2 / segments);
-                float angle2 = (float)((i + 1) * Math.PI * 2 / segments);
-                
-                Vector2 point1 = new Vector2(
-                    center.X + (float)Math.Cos(angle1) * width / 2,
-                    center.Y + (float)Math.Sin(angle1) * height / 2
-                );
-                Vector2 point2 = new Vector2(
-                    center.X + (float)Math.Cos(angle2) * width / 2,
-                    center.Y + (float)Math.Sin(angle2) * height / 2
-                );
-                
-                DrawTriangle(spriteBatch, center, point1, point2, color);
-            }
-        }
-
-        private void DrawTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
-        {
-            float minX = Math.Min(p1.X, Math.Min(p2.X, p3.X));
-            float maxX = Math.Max(p1.X, Math.Max(p2.X, p3.X));
-            float minY = Math.Min(p1.Y, Math.Min(p2.Y, p3.Y));
-            float maxY = Math.Max(p1.Y, Math.Max(p2.Y, p3.Y));
-            
-            for (float x = minX; x <= maxX; x += 2f)
-            {
-                for (float y = minY; y <= maxY; y += 2f)
-                {
-                    if (IsPointInTriangle(new Vector2(x, y), p1, p2, p3))
-                    {
-                        spriteBatch.Draw(_pixelTexture, new Vector2(x, y), color);
-                    }
-                }
-            }
-        }
-
-        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, float thickness)
-        {
-            Vector2 direction = end - start;
-            float length = direction.Length();
-            float angle = (float)Math.Atan2(direction.Y, direction.X);
+            // Пятна на шляпке
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - 8),
+                    (int)(position.Y - _height / 2 + 8),
+                    6,
+                    6
+                ),
+                new Color(100, 50, 30)
+            );
             
             spriteBatch.Draw(
                 _pixelTexture,
-                start,
-                null,
-                color,
-                angle,
-                Vector2.Zero,
-                new Vector2(length, thickness),
-                SpriteEffects.None,
-                0f
+                new Rectangle(
+                    (int)(position.X + 2),
+                    (int)(position.Y - _height / 2 + 5),
+                    5,
+                    5
+                ),
+                new Color(100, 50, 30)
             );
         }
-
-        private bool IsPointInTriangle(Vector2 point, Vector2 p1, Vector2 p2, Vector2 p3)
+        
+        private void DrawStem(SpriteBatch spriteBatch, Vector2 position)
         {
-            float sign(Vector2 a, Vector2 b, Vector2 c)
-            {
-                return (a.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (a.Y - c.Y);
-            }
+            float stemWidth = _width * 0.5f;
+            float stemHeight = _height * 0.35f;
             
-            bool b1 = sign(point, p1, p2) < 0.0f;
-            bool b2 = sign(point, p2, p3) < 0.0f;
-            bool b3 = sign(point, p3, p1) < 0.0f;
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - stemWidth / 2),
+                    (int)(position.Y - stemHeight / 2 + 5),
+                    (int)stemWidth,
+                    (int)stemHeight
+                ),
+                new Color((byte)220, (byte)180, (byte)120, (byte)255) // Бежевый
+            );
+        }
+        
+        private void DrawEyes(SpriteBatch spriteBatch, Vector2 position)
+        {
+            // Белки глаз
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - 8),
+                    (int)(position.Y - 5),
+                    6,
+                    7
+                ),
+                Color.White
+            );
             
-            return (b1 == b2) && (b2 == b3);
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X + 2),
+                    (int)(position.Y - 5),
+                    6,
+                    7
+                ),
+                Color.White
+            );
+            
+            // Зрачки
+            float pupilOffset = _facingRight ? 2f : -2f;
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - 8 + pupilOffset),
+                    (int)(position.Y - 3),
+                    3,
+                    4
+                ),
+                Color.Black
+            );
+            
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X + 2 + pupilOffset),
+                    (int)(position.Y - 3),
+                    3,
+                    4
+                ),
+                Color.Black
+            );
+        }
+        
+        private void DrawFeet(SpriteBatch spriteBatch, Vector2 position)
+        {
+            float footWidth = _width * 0.35f;
+            float footHeight = _height * 0.2f;
+            float footOffset = (float)Math.Sin(_walkAnimationTime) * 3f;
+            
+            // Левая нога
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - 10 - footOffset),
+                    (int)(position.Y + _height / 2 - footHeight),
+                    (int)footWidth,
+                    (int)footHeight
+                ),
+                Color.Black
+            );
+            
+            // Правая нога
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X + 10 + footOffset),
+                    (int)(position.Y + _height / 2 - footHeight),
+                    (int)footWidth,
+                    (int)footHeight
+                ),
+                Color.Black
+            );
+        }
+        
+        private void DrawSquished(SpriteBatch spriteBatch, Vector2 position)
+        {
+            float alpha = _squishTimer / 0.3f;
+            
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(position.X - _width / 2),
+                    (int)(position.Y + _height / 2 - 8),
+                    (int)_width,
+                    8
+                ),
+                new Color((byte)140, (byte)80, (byte)40, (byte)(alpha * 255))
+            );
+        }
+        
+        public void ReverseDirection()
+        {
+            _facingRight = !_facingRight;
         }
 
         public void Dispose()
@@ -289,207 +296,178 @@ namespace mario_monogame.Core.GameObjects
             _pixelTexture?.Dispose();
         }
     }
-
+    
     /// <summary>
-    /// Ворона - летающий враг, который кружит над определённой зоной.
+    /// Ядовитый гриб (бонус).
     /// </summary>
-    public class Crow : IDisposable
+    public class PoisonMushroom : IDisposable
     {
         private readonly GraphicsDevice _graphicsDevice;
         private Vector2 _position;
-        private readonly Vector2 _center;
-        private readonly float _orbitRadius;
-        private float _orbitAngle;
-        private float _orbitSpeed;
+        private Vector2 _velocity;
         private Texture2D _pixelTexture;
         
-        // Анимация крыльев
-        private float _wingFlapTime;
-        private float _wingAngle;
+        private bool _isCollected;
+        private readonly float _moveSpeed;
+        private readonly float _gravity;
+        private float _bounceTime;
         
-        // Размеры
-        private readonly float _bodyWidth;
-        private readonly float _bodyHeight;
-        private readonly float _wingSpan;
+        private readonly float _width;
+        private readonly float _height;
 
         public Vector2 Position => _position;
-        public float InteractionRadius => 30f;
+        public Rectangle Bounds => new Rectangle(
+            (int)(_position.X - _width / 2),
+            (int)(_position.Y - _height / 2),
+            (int)_width,
+            (int)_height
+        );
+        public bool IsCollected => _isCollected;
 
-        public Crow(GraphicsDevice graphicsDevice, Vector2 center, float orbitRadius, float height)
+        public PoisonMushroom(GraphicsDevice graphicsDevice, Vector2 startPosition)
         {
             _graphicsDevice = graphicsDevice;
-            _center = center;
-            _orbitRadius = orbitRadius;
-            _position = new Vector2(center.X + orbitRadius, height);
-            _orbitAngle = 0f;
-            _orbitSpeed = 0.5f;
+            _position = startPosition;
+            _velocity = Vector2.Zero;
             
-            _bodyWidth = 30f;
-            _bodyHeight = 20f;
-            _wingSpan = 40f;
+            _moveSpeed = 80f;
+            _gravity = 1200f;
+            
+            _width = 30f;
+            _height = 30f;
             
             _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
             _pixelTexture.SetData(new[] { Color.White });
             
-            _wingFlapTime = 0f;
-            _wingAngle = 0f;
+            _isCollected = false;
+            _bounceTime = 0f;
         }
 
-        public void Update(GameTime gameTime)
+        public void Update(GameTime gameTime, float groundY)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
             
-            // Орбитальное движение
-            _orbitAngle += _orbitSpeed * elapsed;
-            _position.X = _center.X + (float)Math.Cos(_orbitAngle) * _orbitRadius;
-            _position.Y = _center.Y + (float)Math.Sin(_orbitAngle * 0.5f) * 30f;
+            if (_isCollected) return;
             
-            // Анимация крыльев
-            _wingFlapTime += elapsed * 8f;
-            _wingAngle = (float)Math.Sin(_wingFlapTime) * 0.5f;
-        }
-
-        public void Draw(SpriteBatch spriteBatch)
-        {
-            DrawWings(spriteBatch);
-            DrawBody(spriteBatch);
-            DrawHead(spriteBatch);
-        }
-        
-        private void DrawWings(SpriteBatch spriteBatch)
-        {
-            float wingWidth = _wingSpan * 0.3f;
-            float wingLength = _wingSpan * 0.5f;
+            // Движение
+            _velocity.X = (float)Math.Sin(_bounceTime) * _moveSpeed;
             
-            // Левое крыло
-            spriteBatch.Draw(
-                _pixelTexture,
-                _position + new Vector2(-10f, -5f),
-                null,
-                Color.Black,
-                _wingAngle,
-                new Vector2(wingWidth / 2, 0),
-                new Vector2(wingWidth, wingLength),
-                SpriteEffects.None,
-                0f
-            );
+            // Гравитация
+            _velocity.Y += _gravity * elapsed;
             
-            // Правое крыло
-            spriteBatch.Draw(
-                _pixelTexture,
-                _position + new Vector2(10f, -5f),
-                null,
-                Color.Black,
-                -_wingAngle,
-                new Vector2(wingWidth / 2, 0),
-                new Vector2(wingWidth, wingLength),
-                SpriteEffects.None,
-                0f
-            );
-        }
-        
-        private void DrawBody(SpriteBatch spriteBatch)
-        {
-            // Тело (овал)
-            DrawEllipse(spriteBatch, _position, _bodyWidth, _bodyHeight, Color.Black, 0f);
-        }
-        
-        private void DrawHead(SpriteBatch spriteBatch)
-        {
-            float headSize = 10f;
-            float headOffset = _bodyWidth * 0.4f;
+            // Применение
+            _position += _velocity * elapsed;
             
-            // Голова
-            DrawCircle(spriteBatch, _position + new Vector2(headOffset, -5f), headSize, Color.Black);
-            
-            // Клюв
-            float beakLength = 8f;
-            Vector2 beakStart = _position + new Vector2(headOffset + headSize * 0.5f, -5f);
-            Vector2 beakEnd = beakStart + new Vector2(beakLength, 0);
-            DrawLine(spriteBatch, beakStart, beakEnd, new Color(255, 200, 50), 4f);
-            
-            // Глаз
-            DrawCircle(spriteBatch, _position + new Vector2(headOffset + 3f, -7f), 2f, Color.White);
-            DrawCircle(spriteBatch, _position + new Vector2(headOffset + 4f, -7f), 1f, Color.Black);
-        }
-
-        private void DrawCircle(SpriteBatch spriteBatch, Vector2 center, float radius, Color color)
-        {
-            DrawEllipse(spriteBatch, center, radius * 2, radius * 2, color, 0f);
-        }
-
-        private void DrawEllipse(SpriteBatch spriteBatch, Vector2 center, float width, float height, Color color, float rotation)
-        {
-            int segments = 24;
-            
-            for (int i = 0; i < segments; i++)
+            // Проверка земли
+            if (_position.Y >= groundY)
             {
-                float angle1 = (float)(i * Math.PI * 2 / segments);
-                float angle2 = (float)((i + 1) * Math.PI * 2 / segments);
-                
-                Vector2 point1 = new Vector2(
-                    center.X + (float)Math.Cos(angle1) * width / 2,
-                    center.Y + (float)Math.Sin(angle1) * height / 2
+                _position.Y = groundY;
+                _velocity.Y = 0f;
+            }
+            
+            _bounceTime += elapsed * 3f;
+        }
+
+        public void Collect()
+        {
+            _isCollected = true;
+        }
+
+        public void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
+        {
+            if (_isCollected) return;
+            
+            Vector2 drawPos = _position - cameraPosition;
+            
+            // Шляпка (ядовитый зелёный цвет)
+            float capWidth = _width * 0.9f;
+            float capHeight = _height * 0.55f;
+            
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(drawPos.X - capWidth / 2),
+                    (int)(drawPos.Y - _height / 2),
+                    (int)capWidth,
+                    (int)capHeight
+                ),
+                new Color(50, 180, 50) // Ядовито-зелёный
+            );
+            
+            // Пятна (белые точки)
+            for (int i = 0; i < 5; i++)
+            {
+                float px = drawPos.X - 10 + (i % 3) * 10;
+                float py = drawPos.Y - _height / 2 + 5 + (i / 3) * 8f;
+                spriteBatch.Draw(
+                    _pixelTexture,
+                    new Rectangle(
+                        (int)px,
+                        (int)py,
+                        4,
+                        4
+                    ),
+                    Color.White
                 );
-                Vector2 point2 = new Vector2(
-                    center.X + (float)Math.Cos(angle2) * width / 2,
-                    center.Y + (float)Math.Sin(angle2) * height / 2
-                );
-                
-                DrawTriangle(spriteBatch, center, point1, point2, color);
             }
-        }
-
-        private void DrawTriangle(SpriteBatch spriteBatch, Vector2 p1, Vector2 p2, Vector2 p3, Color color)
-        {
-            float minX = Math.Min(p1.X, Math.Min(p2.X, p3.X));
-            float maxX = Math.Max(p1.X, Math.Max(p2.X, p3.X));
-            float minY = Math.Min(p1.Y, Math.Min(p2.Y, p3.Y));
-            float maxY = Math.Max(p1.Y, Math.Max(p2.Y, p3.Y));
             
-            for (float x = minX; x <= maxX; x += 2f)
-            {
-                for (float y = minY; y <= maxY; y += 2f)
-                {
-                    if (IsPointInTriangle(new Vector2(x, y), p1, p2, p3))
-                    {
-                        spriteBatch.Draw(_pixelTexture, new Vector2(x, y), color);
-                    }
-                }
-            }
-        }
-
-        private void DrawLine(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, float thickness)
-        {
-            Vector2 direction = end - start;
-            float length = direction.Length();
-            float angle = (float)Math.Atan2(direction.Y, direction.X);
+            // Ножка
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(drawPos.X - _width * 0.25f),
+                    (int)(drawPos.Y),
+                    (int)(_width * 0.5f),
+                    (int)(_height * 0.45f)
+                ),
+                new Color(240, 230, 200)
+            );
+            
+            // Злые глаза
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(drawPos.X - 8),
+                    (int)(drawPos.Y - 2),
+                    6,
+                    6
+                ),
+                Color.White
+            );
             
             spriteBatch.Draw(
                 _pixelTexture,
-                start,
-                null,
-                color,
-                angle,
-                Vector2.Zero,
-                new Vector2(length, thickness),
-                SpriteEffects.None,
-                0f
+                new Rectangle(
+                    (int)(drawPos.X + 2),
+                    (int)(drawPos.Y - 2),
+                    6,
+                    6
+                ),
+                Color.White
             );
-        }
-
-        private bool IsPointInTriangle(Vector2 point, Vector2 p1, Vector2 p2, Vector2 p3)
-        {
-            float sign(Vector2 a, Vector2 b, Vector2 c)
-            {
-                return (a.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (a.Y - c.Y);
-            }
             
-            bool b1 = sign(point, p1, p2) < 0.0f;
-            bool b2 = sign(point, p2, p3) < 0.0f;
-            bool b3 = sign(point, p3, p1) < 0.0f;
+            // Зрачки
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(drawPos.X - 6),
+                    (int)(drawPos.Y),
+                    3,
+                    3
+                ),
+                Color.Red
+            );
             
-            return (b1 == b2) && (b2 == b3);
+            spriteBatch.Draw(
+                _pixelTexture,
+                new Rectangle(
+                    (int)(drawPos.X + 4),
+                    (int)(drawPos.Y),
+                    3,
+                    3
+                ),
+                Color.Red
+            );
         }
 
         public void Dispose()
