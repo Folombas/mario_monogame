@@ -39,12 +39,17 @@ namespace mario_monogame.Core
 
         // Фон
         private Texture2D _background;
+        private Texture2D _pixelTexture;
 
         // Состояние
         private int _score;
         private int _coinsCollected;
         private int _lives = 3;
+        private int _currentLevel = 1;
         private GameState _state = GameState.Menu;
+        private bool _isTransitioning;
+        private float _transitionTimer;
+        private TransitionType _transitionType;
 
         // Ввод
         private KeyboardState _prevKeys;
@@ -117,59 +122,64 @@ namespace mario_monogame.Core
             _coins = new List<Coin>();
 
             int tileSize = 48;
+            int levelLength = 50 + _currentLevel * 10; // Уровни становятся длиннее
 
             // Земля
-            for (int x = 0; x < 100; x++)
+            for (int x = 0; x < levelLength; x++)
             {
                 _platforms.Add(new Platform(x * tileSize, 650, tileSize, tileSize, _grassTile, true));
                 _platforms.Add(new Platform(x * tileSize, 698, tileSize, tileSize, _dirtTile, true));
             }
 
-            // Платформы
-            CreatePlatform(5, 12, 4, _brickTile);
-            CreatePlatform(12, 9, 3, _brickTile);
-            CreatePlatform(18, 11, 5, _brickTile);
-            CreatePlatform(26, 8, 4, _brickTile);
-            CreatePlatform(35, 10, 3, _brickTile);
-            CreatePlatform(42, 7, 5, _brickTile);
-            CreatePlatform(52, 9, 4, _brickTile);
-            CreatePlatform(60, 11, 3, _brickTile);
-            CreatePlatform(68, 8, 5, _brickTile);
-            CreatePlatform(78, 10, 4, _brickTile);
+            // Платформы (разная сложность для каждого уровня)
+            int platformCount = 5 + _currentLevel * 2;
+            for (int i = 0; i < platformCount; i++)
+            {
+                int x = 8 + i * 7 + Random.Shared.Next(2);
+                int y = 7 + Random.Shared.Next(5);
+                int length = 3 + Random.Shared.Next(3);
+                CreatePlatform(x, y, length, _brickTile);
+            }
 
             // Вопрос блоки
-            _platforms.Add(new Platform(8 * tileSize, 8 * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
-            _platforms.Add(new Platform(15 * tileSize, 7 * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
-            _platforms.Add(new Platform(30 * tileSize, 8 * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
-            _platforms.Add(new Platform(45 * tileSize, 6 * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
+            int questionCount = 2 + _currentLevel;
+            for (int i = 0; i < questionCount; i++)
+            {
+                int x = 10 + i * 15;
+                int y = 6 + Random.Shared.Next(3);
+                _platforms.Add(new Platform(x * tileSize, y * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
+            }
 
             // Трубы
-            CreatePipe(10, 13, 2, tileSize);
-            CreatePipe(22, 13, 3, tileSize);
-            CreatePipe(38, 13, 2, tileSize);
-            CreatePipe(55, 13, 3, tileSize);
+            int pipeCount = 2 + _currentLevel / 2;
+            for (int i = 0; i < pipeCount; i++)
+            {
+                int x = 12 + i * 20;
+                int height = 2 + Random.Shared.Next(2);
+                CreatePipe(x, 13, height, tileSize);
+            }
 
-            // Враги
-            _enemies.Add(new Enemy(10 * tileSize, 600, _goombaSprite));
-            _enemies.Add(new Enemy(20 * tileSize, 600, _goombaSprite));
-            _enemies.Add(new Enemy(35 * tileSize, 600, _goombaSprite));
-            _enemies.Add(new Enemy(50 * tileSize, 600, _goombaSprite));
-            _enemies.Add(new Enemy(65 * tileSize, 600, _goombaSprite));
+            // Враги (больше с каждым уровнем)
+            int enemyCount = 3 + _currentLevel * 2;
+            for (int i = 0; i < enemyCount; i++)
+            {
+                float x = 300 + i * 400 + Random.Shared.Next(100);
+                _enemies.Add(new Enemy(x, 600, _goombaSprite));
+            }
 
             // Монеты
-            for (int i = 0; i < 50; i++)
+            for (int i = 0; i < 30 + _currentLevel * 10; i++)
             {
-                float x = 200 + i * 80;
-                float y = 500 + (float)Math.Sin(i * 0.5) * 100;
+                float x = 200 + i * 60 + Random.Shared.Next(30);
+                float y = 400 + (float)Math.Sin(i * 0.5) * 150 + Random.Shared.Next(50);
                 _coins.Add(new Coin(x, y, _coinSprite));
             }
 
-            // Монеты на платформах
-            _coins.Add(new Coin(6 * tileSize, 11 * tileSize - 50, _coinSprite));
-            _coins.Add(new Coin(7 * tileSize, 11 * tileSize - 50, _coinSprite));
-            _coins.Add(new Coin(13 * tileSize, 8 * tileSize - 50, _coinSprite));
-            _coins.Add(new Coin(27 * tileSize, 7 * tileSize - 50, _coinSprite));
+            // Флаг финиша
+            _finishLine = new Rectangle((levelLength - 3) * tileSize, 400, 10, 250);
         }
+
+        private Rectangle _finishLine;
 
         private void CreatePlatform(int x, int y, int length, Texture2D tile)
         {
@@ -211,18 +221,26 @@ namespace mario_monogame.Core
             }
             else if (_state == GameState.Playing)
             {
-                UpdatePlayer(dt, keys);
-                UpdateCamera();
-                UpdateEnemies(dt);
-                UpdateCoins();
-                CheckCollisions();
+                if (!_isTransitioning)
+                {
+                    UpdatePlayer(dt, keys);
+                    UpdateCamera();
+                    UpdateEnemies(dt);
+                    UpdateCoins();
+                    CheckCollisions();
+                    CheckLevelComplete();
+                }
+                else
+                {
+                    UpdateTransition(dt);
+                }
 
                 // Смерть от падения
                 if (_playerPos.Y > 800)
                 {
                     _lives--;
                     if (_lives <= 0) _state = GameState.GameOver;
-                    else ResetPlayer();
+                    else { ResetPlayer(); StartTransition(TransitionType.FadeOut); }
                 }
             }
             else if (_state == GameState.GameOver)
@@ -337,6 +355,55 @@ namespace mario_monogame.Core
             }
         }
 
+        private void CheckLevelComplete()
+        {
+            Rectangle playerRect = GetPlayerRect();
+            if (playerRect.Intersects(_finishLine))
+            {
+                StartTransition(TransitionType.LevelComplete);
+            }
+        }
+
+        private void StartTransition(TransitionType type)
+        {
+            _isTransitioning = true;
+            _transitionTimer = 0f;
+            _transitionType = type;
+        }
+
+        private void UpdateTransition(float dt)
+        {
+            _transitionTimer += dt;
+
+            if (_transitionType == TransitionType.FadeOut)
+            {
+                if (_transitionTimer >= 1f)
+                {
+                    ResetPlayer();
+                    _transitionTimer = 0f;
+                    _transitionType = TransitionType.FadeIn;
+                }
+            }
+            else if (_transitionType == TransitionType.FadeIn)
+            {
+                if (_transitionTimer >= 1f)
+                {
+                    _isTransitioning = false;
+                }
+            }
+            else if (_transitionType == TransitionType.LevelComplete)
+            {
+                if (_transitionTimer >= 1.5f)
+                {
+                    _currentLevel++;
+                    _score += 1000;
+                    CreateLevel();
+                    ResetPlayer();
+                    _transitionTimer = 0f;
+                    _transitionType = TransitionType.FadeIn;
+                }
+            }
+        }
         private void CheckCollisions()
         {
             _playerGrounded = false;
@@ -440,7 +507,18 @@ namespace mario_monogame.Core
             SpriteEffects playerFlip = _playerFacingRight ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
             _spriteBatch.Draw(_playerSprite, GetPlayerRect(), null, Color.White, 0f, Vector2.Zero, playerFlip, 0f);
 
+            // Флаг финиша
+            _spriteBatch.Draw(_grassTile, _finishLine, Color.Gold);
+
             _spriteBatch.End();
+
+            // Эффект перехода
+            if (_isTransitioning)
+            {
+                _spriteBatch.Begin();
+                DrawTransition(_spriteBatch);
+                _spriteBatch.End();
+            }
 
             // UI
             _spriteBatch.Begin();
@@ -450,6 +528,14 @@ namespace mario_monogame.Core
                 _spriteBatch.DrawString(_font, $"Score: {_score}", new Vector2(20, 20), Color.White);
                 _spriteBatch.DrawString(_font, $"Coins: {_coinsCollected}", new Vector2(20, 50), Color.Yellow);
                 _spriteBatch.DrawString(_font, $"Lives: {_lives}", new Vector2(20, 80), Color.Red);
+                _spriteBatch.DrawString(_font, $"Level: {_currentLevel}", new Vector2(20, 110), Color.LightGreen);
+
+                // Сообщение о завершении уровня
+                if (_isTransitioning && _transitionType == TransitionType.LevelComplete)
+                {
+                    _spriteBatch.DrawString(_font, "LEVEL COMPLETE!", new Vector2(520, 300), Color.Gold);
+                    _spriteBatch.DrawString(_font, $"Loading Level {_currentLevel + 1}...", new Vector2(500, 360), Color.White);
+                }
             }
 
             if (_state == GameState.Menu)
@@ -469,6 +555,34 @@ namespace mario_monogame.Core
             _spriteBatch.End();
 
             base.Draw(gameTime);
+        }
+
+        private void DrawTransition(SpriteBatch sb)
+        {
+            if (_pixelTexture == null)
+            {
+                _pixelTexture = new Texture2D(GraphicsDevice, 1, 1);
+                _pixelTexture.SetData(new[] { Color.White });
+            }
+
+            int w = GraphicsDevice.Viewport.Width;
+            int h = GraphicsDevice.Viewport.Height;
+
+            if (_transitionType == TransitionType.FadeOut)
+            {
+                float alpha = MathHelper.Clamp(_transitionTimer, 0, 1f);
+                sb.Draw(_pixelTexture, new Rectangle(0, 0, w, h), new Color((byte)0, (byte)0, (byte)0, (byte)(alpha * 200)));
+            }
+            else if (_transitionType == TransitionType.FadeIn)
+            {
+                float alpha = 1f - MathHelper.Clamp(_transitionTimer, 0, 1f);
+                sb.Draw(_pixelTexture, new Rectangle(0, 0, w, h), new Color((byte)0, (byte)0, (byte)0, (byte)(alpha * 200)));
+            }
+            else if (_transitionType == TransitionType.LevelComplete)
+            {
+                float alpha = MathHelper.Clamp(_transitionTimer / 1.5f, 0, 1f);
+                sb.Draw(_pixelTexture, new Rectangle(0, 0, w, h), new Color((byte)255, (byte)215, (byte)0, (byte)(alpha * 100)));
+            }
         }
     }
 
@@ -556,4 +670,5 @@ namespace mario_monogame.Core
     }
 
     public enum GameState { Menu, Playing, GameOver }
+    public enum TransitionType { FadeOut, FadeIn, LevelComplete }
 }
