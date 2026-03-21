@@ -69,6 +69,8 @@ namespace mario_monogame.Core
 
         // Шрифт
         private SpriteFont _font;
+        private SpriteFont _titleFont;
+        private SpriteFont _levelCompleteFont;
 
         // Флаг финиша
         private Rectangle _finishLine;
@@ -89,6 +91,8 @@ namespace mario_monogame.Core
             _pixelTexture.SetData(new[] { Color.White });
 
             try { _font = Content.Load<SpriteFont>("Fonts/Hud"); } catch { }
+            try { _titleFont = Content.Load<SpriteFont>("Fonts/Smilen"); } catch { }
+            try { _levelCompleteFont = Content.Load<SpriteFont>("Fonts/BloodyModes"); } catch { }
 
             // Загружаем спрайты игрока
             try { _playerSprite = Content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_stand"); }
@@ -737,24 +741,28 @@ namespace mario_monogame.Core
 
                 if (_isTransitioning && _transitionType == TransitionType.LevelComplete)
                 {
-                    _spriteBatch.DrawString(_font, "LEVEL COMPLETE!", new Vector2(520, 300), Color.Gold);
-                    _spriteBatch.DrawString(_font, $"Loading Level {_currentLevel + 1}...", new Vector2(500, 360), Color.White);
+                    SpriteFont lcFont = _levelCompleteFont ?? _font;
+                    _spriteBatch.DrawString(lcFont, "LEVEL COMPLETE!", new Vector2(470, 300), Color.Gold);
+                    _spriteBatch.DrawString(_font ?? lcFont, $"Loading Level {_currentLevel + 1}...", new Vector2(480, 380), Color.White);
                 }
             }
 
             if (_state == GameState.Menu)
             {
                 string title = "SUPER ALIEN PLATFORMER";
-                Vector2 titleSize = _font?.MeasureString(title) ?? new Vector2(300, 50);
-                _spriteBatch.DrawString(_font, title, new Vector2(640 - titleSize.X / 2, 200), Color.White);
-                _spriteBatch.DrawString(_font, "Press ENTER to Start", new Vector2(640 - 120, 300), Color.Yellow);
-                _spriteBatch.DrawString(_font, "A/D - Move | SPACE - Jump", new Vector2(640 - 130, 380), Color.LightGray);
-                _spriteBatch.DrawString(_font, "Open chests for loot!", new Vector2(640 - 100, 430), Color.Orange);
+                SpriteFont useFont = _titleFont ?? _font;
+                Vector2 titleSize = useFont?.MeasureString(title) ?? new Vector2(400, 80);
+                _spriteBatch.DrawString(useFont, title, new Vector2(640 - titleSize.X / 2 + 3, 180 + 3), Color.Black);
+                _spriteBatch.DrawString(useFont, title, new Vector2(640 - titleSize.X / 2, 180), new Color(100, 255, 100));
+                _spriteBatch.DrawString(_font ?? useFont, "Press ENTER to Start", new Vector2(640 - 120, 300), Color.Yellow);
+                _spriteBatch.DrawString(_font ?? useFont, "A/D - Move | SPACE - Jump", new Vector2(640 - 130, 380), Color.LightGray);
+                _spriteBatch.DrawString(_font ?? useFont, "Open chests for loot!", new Vector2(640 - 100, 430), Color.Orange);
             }
             else if (_state == GameState.GameOver)
             {
-                _spriteBatch.DrawString(_font, "GAME OVER", new Vector2(550, 300), Color.Red);
-                _spriteBatch.DrawString(_font, "Press SPACE to Restart", new Vector2(520, 380), Color.White);
+                SpriteFont goFont = _levelCompleteFont ?? _font;
+                _spriteBatch.DrawString(goFont, "GAME OVER", new Vector2(500, 300), Color.Red);
+                _spriteBatch.DrawString(_font ?? goFont, "Press SPACE to Restart", new Vector2(520, 380), Color.White);
             }
 
             _spriteBatch.End();
