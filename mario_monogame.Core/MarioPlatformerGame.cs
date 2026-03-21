@@ -17,25 +17,38 @@ namespace mario_monogame.Core
         private Texture2D _playerSprite;
         private bool _playerGrounded;
         private bool _playerFacingRight = true;
-        private float _playerAnimTimer;
         private Rectangle _playerRect;
+        
+        // Прокачка
+        private int _playerLevel = 1;
+        private int _playerExp = 0;
+        private int _expToNextLevel = 100;
+        private WeaponType _currentWeapon = WeaponType.Sword;
+        private int _damage = 10;
+        private float _moveSpeed = 400f;
 
         // Камера
         private Vector2 _cameraPos;
 
-        // Платформы
+        // Платформы и тайлы
         private List<Platform> _platforms;
-        private Texture2D _grassTile;
-        private Texture2D _dirtTile;
-        private Texture2D _brickTile;
+        private int _tileSize = 48;
+        
+        // Биомы
+        private BiomeType _currentBiome;
+        private Dictionary<BiomeType, BiomeTiles> _biomeTiles;
 
         // Враги
         private List<Enemy> _enemies;
-        private Texture2D _goombaSprite;
-
+        
+        // Сундуки
+        private List<Chest> _chests;
+        
         // Монеты
         private List<Coin> _coins;
-        private Texture2D _coinSprite;
+        
+        // Оружие на карте
+        private List<WeaponPickup> _weapons;
 
         // Фон
         private Texture2D _background;
@@ -57,6 +70,9 @@ namespace mario_monogame.Core
         // Шрифт
         private SpriteFont _font;
 
+        // Флаг финиша
+        private Rectangle _finishLine;
+
         public MarioPlatformerGame()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -69,34 +85,27 @@ namespace mario_monogame.Core
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
+            _pixelTexture = new Texture2D(GraphicsDevice, 1, 1);
+            _pixelTexture.SetData(new[] { Color.White });
 
-            // Загружаем шрифт
             try { _font = Content.Load<SpriteFont>("Fonts/Hud"); } catch { }
 
             // Загружаем спрайты игрока
-            try
-            {
-                _playerSprite = Content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_stand");
-            }
+            try { _playerSprite = Content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_stand"); }
             catch { _playerSprite = CreatePlaceholder(64, 64, Color.Lime); }
 
-            // Загружаем тайлы
-            try { _grassTile = Content.Load<Texture2D>("Sprites/Ground/Grass/grassMid"); }
-            catch { _grassTile = CreatePlaceholder(48, 48, Color.Green); }
-
-            try { _dirtTile = Content.Load<Texture2D>("Sprites/Ground/Dirt/dirtMid"); }
-            catch { _dirtTile = CreatePlaceholder(48, 48, Color.Brown); }
-
-            try { _brickTile = Content.Load<Texture2D>("Sprites/Tiles/brickBrown"); }
-            catch { _brickTile = CreatePlaceholder(48, 48, Color.Red); }
+            // Загружаем биомы
+            LoadBiomes();
 
             // Загружаем врагов
-            try { _goombaSprite = Content.Load<Texture2D>("Sprites/Enemies/slimeGreen"); }
-            catch { _goombaSprite = CreatePlaceholder(48, 32, Color.Purple); }
+            LoadEnemySprites();
 
-            // Загружаем монеты
+            // Загружаем предметы
             try { _coinSprite = Content.Load<Texture2D>("Sprites/Items/coinGold"); }
             catch { _coinSprite = CreatePlaceholder(32, 32, Color.Gold); }
+
+            try { _chestSprite = Content.Load<Texture2D>("Sprites/Tiles/boxCrate"); }
+            catch { _chestSprite = CreatePlaceholder(48, 48, Color.Brown); }
 
             // Загружаем фон
             try { _background = Content.Load<Texture2D>("Sprites/Backgrounds/blue_grass"); }
@@ -104,6 +113,108 @@ namespace mario_monogame.Core
 
             CreateLevel();
             ResetPlayer();
+        }
+
+        private void LoadBiomes()
+        {
+            _biomeTiles = new Dictionary<BiomeType, BiomeTiles>();
+
+            // Grassland
+            var grass = new BiomeTiles();
+            try { grass.Ground = Content.Load<Texture2D>("Sprites/Ground/Grass/grassMid"); }
+            catch { grass.Ground = CreatePlaceholder(48, 48, Color.Green); }
+            try { grass.Dirt = Content.Load<Texture2D>("Sprites/Ground/Dirt/dirtMid"); }
+            catch { grass.Dirt = CreatePlaceholder(48, 48, Color.Brown); }
+            try { grass.Brick = Content.Load<Texture2D>("Sprites/Tiles/brickBrown"); }
+            catch { grass.Brick = CreatePlaceholder(48, 48, Color.Red); }
+            try { grass.Background = Content.Load<Texture2D>("Sprites/Backgrounds/blue_grass"); }
+            catch { }
+            _biomeTiles[BiomeType.Grassland] = grass;
+
+            // Desert
+            var desert = new BiomeTiles();
+            try { desert.Ground = Content.Load<Texture2D>("Sprites/Ground/Sand/sandMid"); }
+            catch { desert.Ground = CreatePlaceholder(48, 48, Color.SandyBrown); }
+            try { desert.Dirt = Content.Load<Texture2D>("Sprites/Ground/Sand/sand"); }
+            catch { desert.Dirt = CreatePlaceholder(48, 48, Color.SandyBrown); }
+            try { desert.Brick = Content.Load<Texture2D>("Sprites/Tiles/brickBrown"); }
+            catch { desert.Brick = CreatePlaceholder(48, 48, Color.Orange); }
+            try { desert.Background = Content.Load<Texture2D>("Sprites/Backgrounds/blue_desert"); }
+            catch { }
+            _biomeTiles[BiomeType.Desert] = desert;
+
+            // Snow
+            var snow = new BiomeTiles();
+            try { snow.Ground = Content.Load<Texture2D>("Sprites/Ground/Snow/snowMid"); }
+            catch { snow.Ground = CreatePlaceholder(48, 48, Color.White); }
+            try { snow.Dirt = Content.Load<Texture2D>("Sprites/Ground/Snow/snow"); }
+            catch { snow.Dirt = CreatePlaceholder(48, 48, Color.LightBlue); }
+            try { snow.Brick = Content.Load<Texture2D>("Sprites/Tiles/brickGrey"); }
+            catch { snow.Brick = CreatePlaceholder(48, 48, Color.Gray); }
+            try { snow.Background = Content.Load<Texture2D>("Sprites/Backgrounds/blue_shroom"); }
+            catch { }
+            _biomeTiles[BiomeType.Snow] = snow;
+
+            // Cave
+            var cave = new BiomeTiles();
+            try { cave.Ground = Content.Load<Texture2D>("Sprites/Ground/Stone/stoneMid"); }
+            catch { cave.Ground = CreatePlaceholder(48, 48, Color.DarkGray); }
+            try { cave.Dirt = Content.Load<Texture2D>("Sprites/Ground/Stone/stone"); }
+            catch { cave.Dirt = CreatePlaceholder(48, 48, Color.Gray); }
+            try { cave.Brick = Content.Load<Texture2D>("Sprites/Tiles/boxCrate"); }
+            catch { cave.Brick = CreatePlaceholder(48, 48, Color.Brown); }
+            try { cave.Background = Content.Load<Texture2D>("Sprites/Backgrounds/colored_land"); }
+            catch { }
+            _biomeTiles[BiomeType.Cave] = cave;
+
+            // Castle
+            var castle = new BiomeTiles();
+            try { castle.Ground = Content.Load<Texture2D>("Sprites/Ground/Stone/stoneMid"); }
+            catch { castle.Ground = CreatePlaceholder(48, 48, Color.Purple); }
+            try { castle.Dirt = Content.Load<Texture2D>("Sprites/Ground/Stone/stone"); }
+            catch { castle.Dirt = CreatePlaceholder(48, 48, Color.Purple); }
+            try { castle.Brick = Content.Load<Texture2D>("Sprites/Tiles/brickGrey"); }
+            catch { castle.Brick = CreatePlaceholder(48, 48, Color.Indigo); }
+            try { castle.Background = Content.Load<Texture2D>("Sprites/Backgrounds/colored_shroom"); }
+            catch { }
+            _biomeTiles[BiomeType.Castle] = castle;
+
+            // Forest
+            var forest = new BiomeTiles();
+            try { forest.Ground = Content.Load<Texture2D>("Sprites/Ground/Dirt/dirtMid"); }
+            catch { forest.Ground = CreatePlaceholder(48, 48, Color.Green); }
+            try { forest.Dirt = Content.Load<Texture2D>("Sprites/Ground/Dirt/dirt"); }
+            catch { forest.Dirt = CreatePlaceholder(48, 48, Color.Brown); }
+            try { forest.Brick = Content.Load<Texture2D>("Sprites/Tiles/boxCrate"); }
+            catch { forest.Brick = CreatePlaceholder(48, 48, Color.DarkGreen); }
+            try { forest.Background = Content.Load<Texture2D>("Sprites/Backgrounds/colored_grass"); }
+            catch { }
+            _biomeTiles[BiomeType.Forest] = forest;
+
+            // Industrial
+            var industrial = new BiomeTiles();
+            try { industrial.Ground = Content.Load<Texture2D>("Sprites/Ground/Stone/stoneMid"); }
+            catch { industrial.Ground = CreatePlaceholder(48, 48, Color.Gray); }
+            try { industrial.Dirt = Content.Load<Texture2D>("Sprites/Ground/Stone/stone"); }
+            catch { industrial.Dirt = CreatePlaceholder(48, 48, Color.DarkGray); }
+            try { industrial.Brick = Content.Load<Texture2D>("Sprites/Tiles/boxCrate_warning"); }
+            catch { industrial.Brick = CreatePlaceholder(48, 48, Color.Orange); }
+            try { industrial.Background = Content.Load<Texture2D>("Sprites/Backgrounds/colored_desert"); }
+            catch { }
+            _biomeTiles[BiomeType.Industrial] = industrial;
+        }
+
+        private void LoadEnemySprites()
+        {
+            _enemySprites = new Dictionary<string, Texture2D>();
+            try { _enemySprites["goomba"] = Content.Load<Texture2D>("Sprites/Enemies/slimeGreen"); }
+            catch { _enemySprites["goomba"] = CreatePlaceholder(48, 32, Color.Purple); }
+            try { _enemySprites["slime"] = Content.Load<Texture2D>("Sprites/Enemies/slimeBlue"); }
+            catch { _enemySprites["slime"] = CreatePlaceholder(48, 32, Color.Blue); }
+            try { _enemySprites["bee"] = Content.Load<Texture2D>("Sprites/Enemies/bee"); }
+            catch { _enemySprites["bee"] = CreatePlaceholder(48, 48, Color.Yellow); }
+            try { _enemySprites["mouse"] = Content.Load<Texture2D>("Sprites/Enemies/mouse"); }
+            catch { _enemySprites["mouse"] = CreatePlaceholder(48, 32, Color.Gray); }
         }
 
         private Texture2D CreatePlaceholder(int w, int h, Color c)
@@ -115,30 +226,40 @@ namespace mario_monogame.Core
             return tex;
         }
 
+        private BiomeType GetBiomeForLevel(int level)
+        {
+            return (BiomeType)((level - 1) % 7);
+        }
+
         private void CreateLevel()
         {
             _platforms = new List<Platform>();
             _enemies = new List<Enemy>();
             _coins = new List<Coin>();
+            _chests = new List<Chest>();
+            _weapons = new List<WeaponPickup>();
 
-            int tileSize = 48;
-            int levelLength = 50 + _currentLevel * 10; // Уровни становятся длиннее
+            _currentBiome = GetBiomeForLevel(_currentLevel);
+            BiomeTiles tiles = _biomeTiles[_currentBiome];
+            _background = tiles.Background ?? _background;
+
+            int levelLength = 50 + _currentLevel * 10;
 
             // Земля
             for (int x = 0; x < levelLength; x++)
             {
-                _platforms.Add(new Platform(x * tileSize, 650, tileSize, tileSize, _grassTile, true));
-                _platforms.Add(new Platform(x * tileSize, 698, tileSize, tileSize, _dirtTile, true));
+                _platforms.Add(new Platform(x * _tileSize, 650, _tileSize, _tileSize, tiles.Ground, true));
+                _platforms.Add(new Platform(x * _tileSize, 698, _tileSize, _tileSize, tiles.Dirt, true));
             }
 
-            // Платформы (разная сложность для каждого уровня)
+            // Платформы
             int platformCount = 5 + _currentLevel * 2;
             for (int i = 0; i < platformCount; i++)
             {
                 int x = 8 + i * 7 + Random.Shared.Next(2);
                 int y = 7 + Random.Shared.Next(5);
                 int length = 3 + Random.Shared.Next(3);
-                CreatePlatform(x, y, length, _brickTile);
+                CreatePlatform(x, y, length, tiles.Brick);
             }
 
             // Вопрос блоки
@@ -147,7 +268,7 @@ namespace mario_monogame.Core
             {
                 int x = 10 + i * 15;
                 int y = 6 + Random.Shared.Next(3);
-                _platforms.Add(new Platform(x * tileSize, y * tileSize - 48, tileSize, tileSize, _brickTile, true) { IsQuestion = true });
+                _platforms.Add(new Platform(x * _tileSize, y * _tileSize - 48, _tileSize, _tileSize, tiles.Brick, true) { IsQuestion = true });
             }
 
             // Трубы
@@ -156,15 +277,37 @@ namespace mario_monogame.Core
             {
                 int x = 12 + i * 20;
                 int height = 2 + Random.Shared.Next(2);
-                CreatePipe(x, 13, height, tileSize);
+                CreatePipe(x, 13, height);
             }
 
-            // Враги (больше с каждым уровнем)
+            // Сундуки
+            int chestCount = 3 + _currentLevel / 2;
+            for (int i = 0; i < chestCount; i++)
+            {
+                int x = 15 + i * 20 + Random.Shared.Next(5);
+                int y = 600;
+                _chests.Add(new Chest(x * _tileSize, y, _chestSprite));
+            }
+
+            // Оружие на карте
+            if (Random.Shared.Next(3) == 0)
+            {
+                int x = 20 + Random.Shared.Next(30);
+                _weapons.Add(new WeaponPickup(x * _tileSize, 500, WeaponType.Spear));
+            }
+            if (Random.Shared.Next(4) == 0)
+            {
+                int x = 35 + Random.Shared.Next(20);
+                _weapons.Add(new WeaponPickup(x * _tileSize, 500, WeaponType.Axe));
+            }
+
+            // Враги (разные типы)
             int enemyCount = 3 + _currentLevel * 2;
             for (int i = 0; i < enemyCount; i++)
             {
                 float x = 300 + i * 400 + Random.Shared.Next(100);
-                _enemies.Add(new Enemy(x, 600, _goombaSprite));
+                string type = i % 3 == 0 ? "slime" : (i % 3 == 1 ? "bee" : "mouse");
+                _enemies.Add(new Enemy(x, 600, _enemySprites.ContainsKey(type) ? _enemySprites[type] : _enemySprites["goomba"], type));
             }
 
             // Монеты
@@ -176,25 +319,22 @@ namespace mario_monogame.Core
             }
 
             // Флаг финиша
-            _finishLine = new Rectangle((levelLength - 3) * tileSize, 400, 10, 250);
+            _finishLine = new Rectangle((levelLength - 3) * _tileSize, 400, 10, 250);
         }
-
-        private Rectangle _finishLine;
 
         private void CreatePlatform(int x, int y, int length, Texture2D tile)
         {
-            int tileSize = 48;
             for (int i = 0; i < length; i++)
             {
-                _platforms.Add(new Platform((x + i) * tileSize, y * tileSize - tileSize, tileSize, tileSize, tile, true));
+                _platforms.Add(new Platform((x + i) * _tileSize, y * _tileSize - _tileSize, _tileSize, _tileSize, tile, true));
             }
         }
 
-        private void CreatePipe(int x, int y, int height, int tileSize)
+        private void CreatePipe(int x, int y, int height)
         {
             for (int i = 0; i < height; i++)
             {
-                _platforms.Add(new Platform(x * tileSize + tileSize / 4, (y + i) * tileSize, tileSize / 2, tileSize, _grassTile, true));
+                _platforms.Add(new Platform(x * _tileSize + _tileSize / 4, (y + i) * _tileSize, _tileSize / 2, _tileSize, _biomeTiles[_currentBiome].Ground, true));
             }
         }
 
@@ -211,7 +351,6 @@ namespace mario_monogame.Core
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             KeyboardState keys = Keyboard.GetState();
 
-            // Выход
             if (keys.IsKeyDown(Keys.Escape)) Exit();
 
             if (_state == GameState.Menu)
@@ -227,6 +366,8 @@ namespace mario_monogame.Core
                     UpdateCamera();
                     UpdateEnemies(dt);
                     UpdateCoins();
+                    UpdateChests();
+                    UpdateWeapons();
                     CheckCollisions();
                     CheckLevelComplete();
                 }
@@ -235,7 +376,6 @@ namespace mario_monogame.Core
                     UpdateTransition(dt);
                 }
 
-                // Смерть от падения
                 if (_playerPos.Y > 800)
                 {
                     _lives--;
@@ -247,10 +387,15 @@ namespace mario_monogame.Core
             {
                 if (keys.IsKeyDown(Keys.Space) && _prevKeys.IsKeyUp(Keys.Space))
                 {
+                    _currentLevel = 1;
+                    _playerLevel = 1;
+                    _playerExp = 0;
                     _lives = 3;
                     _score = 0;
                     _coinsCollected = 0;
+                    _currentWeapon = WeaponType.Sword;
                     ResetPlayer();
+                    CreateLevel();
                     _state = GameState.Playing;
                 }
             }
@@ -261,8 +406,6 @@ namespace mario_monogame.Core
 
         private void UpdatePlayer(float dt, KeyboardState keys)
         {
-            // Движение
-            float speed = 400f;
             float accel = 2000f;
             float friction = 0.85f;
 
@@ -281,27 +424,18 @@ namespace mario_monogame.Core
                 _playerVel.X *= friction;
             }
 
-            _playerVel.X = MathHelper.Clamp(_playerVel.X, -speed, speed);
+            _playerVel.X = MathHelper.Clamp(_playerVel.X, -_moveSpeed, _moveSpeed);
 
-            // Прыжок
             if ((keys.IsKeyDown(Keys.Space) || keys.IsKeyDown(Keys.W) || keys.IsKeyDown(Keys.Up)) && _playerGrounded)
             {
                 _playerVel.Y = -700f;
                 _playerGrounded = false;
             }
 
-            // Гравитация
             _playerVel.Y += 2000f * dt;
             _playerVel.Y = MathHelper.Clamp(_playerVel.Y, -1000f, 1000f);
 
-            // Применяем скорость
             _playerPos += _playerVel * dt;
-
-            // Анимация
-            if (Math.Abs(_playerVel.X) > 10 && _playerGrounded)
-                _playerAnimTimer += dt * 10f;
-            else
-                _playerAnimTimer = 0f;
         }
 
         private void UpdateCamera()
@@ -317,13 +451,13 @@ namespace mario_monogame.Core
                 {
                     enemy.Update(dt, 600f);
 
-                    // Коллизия с игроком
                     if (GetPlayerRect().Intersects(enemy.Rect))
                     {
                         if (_playerVel.Y > 0 && _playerPos.Y < enemy.Pos.Y)
                         {
                             enemy.Kill();
                             _playerVel.Y = -400f;
+                            AddExp(50);
                             _score += 200;
                         }
                         else
@@ -341,15 +475,113 @@ namespace mario_monogame.Core
         {
             foreach (var coin in _coins)
             {
-                if (!coin.Collected)
+                if (!coin.Collected && GetPlayerRect().Intersects(coin.Rect))
                 {
-                    coin.Update();
+                    coin.Collected = true;
+                    _score += 50;
+                    _coinsCollected++;
+                    AddExp(10);
+                }
+            }
+        }
 
-                    if (GetPlayerRect().Intersects(coin.Rect))
+        private void UpdateChests()
+        {
+            foreach (var chest in _chests)
+            {
+                if (!chest.Opened && GetPlayerRect().Intersects(chest.Rect))
+                {
+                    chest.Open();
+                    LootChest(chest);
+                }
+            }
+        }
+
+        private void UpdateWeapons()
+        {
+            foreach (var weapon in _weapons)
+            {
+                if (!weapon.Collected && GetPlayerRect().Intersects(weapon.Rect))
+                {
+                    weapon.Collected = true;
+                    _currentWeapon = weapon.WeaponType;
+                    _damage += 5;
+                    _score += 100;
+                }
+            }
+        }
+
+        private void LootChest(Chest chest)
+        {
+            var reward = chest.GetLoot();
+            _score += reward.Score;
+            _coinsCollected += reward.Coins;
+            AddExp(reward.Exp);
+            
+            if (reward.Weapon != WeaponType.None)
+            {
+                _currentWeapon = reward.Weapon;
+                _damage += 10;
+            }
+        }
+
+        private void AddExp(int exp)
+        {
+            _playerExp += exp;
+            if (_playerExp >= _expToNextLevel)
+            {
+                _playerLevel++;
+                _playerExp -= _expToNextLevel;
+                _expToNextLevel = (int)(_expToNextLevel * 1.5f);
+                _damage += 2;
+                _moveSpeed += 20;
+                _lives++;
+            }
+        }
+
+        private void CheckCollisions()
+        {
+            _playerGrounded = false;
+            Rectangle playerRect = GetPlayerRect();
+
+            foreach (var plat in _platforms)
+            {
+                if (playerRect.Intersects(plat.Rect))
+                {
+                    float overlapLeft = playerRect.Right - plat.Rect.Left;
+                    float overlapRight = plat.Rect.Right - playerRect.Left;
+                    float overlapTop = playerRect.Bottom - plat.Rect.Top;
+                    float overlapBottom = plat.Rect.Bottom - playerRect.Top;
+
+                    float minOverlap = Math.Min(Math.Min(overlapLeft, overlapRight), Math.Min(overlapTop, overlapBottom));
+
+                    if (minOverlap == overlapTop && _playerVel.Y >= 0)
                     {
-                        coin.Collected = true;
-                        _score += 50;
-                        _coinsCollected++;
+                        _playerPos.Y = plat.Rect.Top - _playerRect.Height / 2f;
+                        _playerVel.Y = 0;
+                        _playerGrounded = true;
+
+                        if (plat.IsQuestion && !plat.IsUsed)
+                        {
+                            plat.IsUsed = true;
+                            AddExp(25);
+                            _coinsCollected += 5;
+                        }
+                    }
+                    else if (minOverlap == overlapBottom && _playerVel.Y < 0)
+                    {
+                        _playerPos.Y = plat.Rect.Bottom + _playerRect.Height / 2f;
+                        _playerVel.Y = 0;
+                    }
+                    else if (minOverlap == overlapLeft)
+                    {
+                        _playerPos.X = plat.Rect.Left - _playerRect.Width / 2f;
+                        _playerVel.X = 0;
+                    }
+                    else if (minOverlap == overlapRight)
+                    {
+                        _playerPos.X = plat.Rect.Right + _playerRect.Width / 2f;
+                        _playerVel.X = 0;
                     }
                 }
             }
@@ -357,8 +589,7 @@ namespace mario_monogame.Core
 
         private void CheckLevelComplete()
         {
-            Rectangle playerRect = GetPlayerRect();
-            if (playerRect.Intersects(_finishLine))
+            if (GetPlayerRect().Intersects(_finishLine))
             {
                 StartTransition(TransitionType.LevelComplete);
             }
@@ -397,60 +628,11 @@ namespace mario_monogame.Core
                 {
                     _currentLevel++;
                     _score += 1000;
+                    AddExp(200);
                     CreateLevel();
                     ResetPlayer();
                     _transitionTimer = 0f;
                     _transitionType = TransitionType.FadeIn;
-                }
-            }
-        }
-        private void CheckCollisions()
-        {
-            _playerGrounded = false;
-            Rectangle playerRect = GetPlayerRect();
-
-            foreach (var plat in _platforms)
-            {
-                if (playerRect.Intersects(plat.Rect))
-                {
-                    // Определяем направление коллизии
-                    float overlapLeft = playerRect.Right - plat.Rect.Left;
-                    float overlapRight = plat.Rect.Right - playerRect.Left;
-                    float overlapTop = playerRect.Bottom - plat.Rect.Top;
-                    float overlapBottom = plat.Rect.Bottom - playerRect.Top;
-
-                    float minOverlap = Math.Min(Math.Min(overlapLeft, overlapRight), Math.Min(overlapTop, overlapBottom));
-
-                    if (minOverlap == overlapTop && _playerVel.Y >= 0)
-                    {
-                        // Приземление
-                        _playerPos.Y = plat.Rect.Top - _playerRect.Height / 2f;
-                        _playerVel.Y = 0;
-                        _playerGrounded = true;
-
-                        if (plat.IsQuestion && !plat.IsUsed)
-                        {
-                            plat.IsUsed = true;
-                            _score += 100;
-                            _coinsCollected += 5;
-                        }
-                    }
-                    else if (minOverlap == overlapBottom && _playerVel.Y < 0)
-                    {
-                        // Удар головой
-                        _playerPos.Y = plat.Rect.Bottom + _playerRect.Height / 2f;
-                        _playerVel.Y = 0;
-                    }
-                    else if (minOverlap == overlapLeft)
-                    {
-                        _playerPos.X = plat.Rect.Left - _playerRect.Width / 2f;
-                        _playerVel.X = 0;
-                    }
-                    else if (minOverlap == overlapRight)
-                    {
-                        _playerPos.X = plat.Rect.Right + _playerRect.Width / 2f;
-                        _playerVel.X = 0;
-                    }
                 }
             }
         }
@@ -466,7 +648,7 @@ namespace mario_monogame.Core
 
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, transformMatrix: Matrix.CreateTranslation(-_cameraPos.X, 0, 0));
 
-            // Фон (параллакс)
+            // Фон
             if (_background != null)
             {
                 for (int x = -(int)(_cameraPos.X * 0.3f % _background.Width); x < 1280; x += _background.Width)
@@ -480,7 +662,26 @@ namespace mario_monogame.Core
             {
                 if (plat.Rect.Right > _cameraPos.X && plat.Rect.Left < _cameraPos.X + 1280)
                 {
-                    _spriteBatch.Draw(plat.Texture, plat.Rect, plat.IsQuestion && !plat.IsUsed ? Color.Gold : Color.White);
+                    Color tint = plat.IsQuestion && !plat.IsUsed ? Color.Gold : Color.White;
+                    _spriteBatch.Draw(plat.Texture, plat.Rect, tint);
+                }
+            }
+
+            // Сундуки
+            foreach (var chest in _chests)
+            {
+                if (!chest.Opened && chest.Rect.Right > _cameraPos.X && chest.Rect.Left < _cameraPos.X + 1280)
+                {
+                    _spriteBatch.Draw(chest.Texture, chest.Rect, Color.White);
+                }
+            }
+
+            // Оружие
+            foreach (var weapon in _weapons)
+            {
+                if (!weapon.Collected && weapon.Rect.Right > _cameraPos.X && weapon.Rect.Left < _cameraPos.X + 1280)
+                {
+                    _spriteBatch.Draw(_pixelTexture, weapon.Rect, weapon.WeaponType == WeaponType.Spear ? Color.Silver : Color.Orange);
                 }
             }
 
@@ -508,11 +709,11 @@ namespace mario_monogame.Core
             _spriteBatch.Draw(_playerSprite, GetPlayerRect(), null, Color.White, 0f, Vector2.Zero, playerFlip, 0f);
 
             // Флаг финиша
-            _spriteBatch.Draw(_grassTile, _finishLine, Color.Gold);
+            _spriteBatch.Draw(_pixelTexture, _finishLine, Color.Gold);
 
             _spriteBatch.End();
 
-            // Эффект перехода
+            // Переход
             if (_isTransitioning)
             {
                 _spriteBatch.Begin();
@@ -529,8 +730,11 @@ namespace mario_monogame.Core
                 _spriteBatch.DrawString(_font, $"Coins: {_coinsCollected}", new Vector2(20, 50), Color.Yellow);
                 _spriteBatch.DrawString(_font, $"Lives: {_lives}", new Vector2(20, 80), Color.Red);
                 _spriteBatch.DrawString(_font, $"Level: {_currentLevel}", new Vector2(20, 110), Color.LightGreen);
+                _spriteBatch.DrawString(_font, $"Hero Level: {_playerLevel}", new Vector2(20, 140), Color.Purple);
+                _spriteBatch.DrawString(_font, $"EXP: {_playerExp}/{_expToNextLevel}", new Vector2(20, 170), Color.Cyan);
+                _spriteBatch.DrawString(_font, $"Weapon: {_currentWeapon}", new Vector2(20, 200), Color.Orange);
+                _spriteBatch.DrawString(_font, $"Damage: {_damage}", new Vector2(20, 230), Color.Red);
 
-                // Сообщение о завершении уровня
                 if (_isTransitioning && _transitionType == TransitionType.LevelComplete)
                 {
                     _spriteBatch.DrawString(_font, "LEVEL COMPLETE!", new Vector2(520, 300), Color.Gold);
@@ -542,9 +746,10 @@ namespace mario_monogame.Core
             {
                 string title = "SUPER ALIEN PLATFORMER";
                 Vector2 titleSize = _font?.MeasureString(title) ?? new Vector2(300, 50);
-                _spriteBatch.DrawString(_font, title, new Vector2(640 - titleSize.X / 2, 250), Color.White);
-                _spriteBatch.DrawString(_font, "Press ENTER to Start", new Vector2(640 - 120, 350), Color.Yellow);
-                _spriteBatch.DrawString(_font, "A/D - Move | SPACE - Jump", new Vector2(640 - 130, 450), Color.LightGray);
+                _spriteBatch.DrawString(_font, title, new Vector2(640 - titleSize.X / 2, 200), Color.White);
+                _spriteBatch.DrawString(_font, "Press ENTER to Start", new Vector2(640 - 120, 300), Color.Yellow);
+                _spriteBatch.DrawString(_font, "A/D - Move | SPACE - Jump", new Vector2(640 - 130, 380), Color.LightGray);
+                _spriteBatch.DrawString(_font, "Open chests for loot!", new Vector2(640 - 100, 430), Color.Orange);
             }
             else if (_state == GameState.GameOver)
             {
@@ -559,12 +764,6 @@ namespace mario_monogame.Core
 
         private void DrawTransition(SpriteBatch sb)
         {
-            if (_pixelTexture == null)
-            {
-                _pixelTexture = new Texture2D(GraphicsDevice, 1, 1);
-                _pixelTexture.SetData(new[] { Color.White });
-            }
-
             int w = GraphicsDevice.Viewport.Width;
             int h = GraphicsDevice.Viewport.Height;
 
@@ -584,6 +783,20 @@ namespace mario_monogame.Core
                 sb.Draw(_pixelTexture, new Rectangle(0, 0, w, h), new Color((byte)255, (byte)215, (byte)0, (byte)(alpha * 100)));
             }
         }
+
+        private Texture2D _coinSprite;
+        private Texture2D _chestSprite;
+        private Dictionary<string, Texture2D> _enemySprites;
+    }
+
+    public enum BiomeType { Grassland, Desert, Snow, Cave, Castle, Forest, Industrial }
+
+    public class BiomeTiles
+    {
+        public Texture2D Ground;
+        public Texture2D Dirt;
+        public Texture2D Brick;
+        public Texture2D Background;
     }
 
     public class Platform
@@ -609,14 +822,16 @@ namespace mario_monogame.Core
         public Texture2D Texture;
         public bool Alive = true;
         public bool FacingRight;
+        public string Type;
         private float _animTimer;
 
         public Rectangle Rect => new Rectangle((int)Pos.X - 24, (int)Pos.Y - 16, 48, 32);
 
-        public Enemy(float x, float y, Texture2D tex)
+        public Enemy(float x, float y, Texture2D tex, string type)
         {
             Pos = new Vector2(x, y);
             Texture = tex;
+            Type = type;
             FacingRight = Random.Shared.Next(2) == 0;
         }
 
@@ -624,7 +839,6 @@ namespace mario_monogame.Core
         {
             Vel.X = FacingRight ? 50f : -50f;
             Vel.Y += 1500f * dt;
-
             Pos += Vel * dt;
 
             if (Pos.Y >= groundY)
@@ -641,10 +855,7 @@ namespace mario_monogame.Core
             }
         }
 
-        public void Kill()
-        {
-            Alive = false;
-        }
+        public void Kill() => Alive = false;
     }
 
     public class Coin
@@ -663,11 +874,91 @@ namespace mario_monogame.Core
             Texture = tex;
         }
 
-        public void Update()
+        public void Update() => _animTimer += 0.05f;
+    }
+
+    public class Chest
+    {
+        public float X, Y;
+        public Texture2D Texture;
+        public bool Opened;
+
+        public Rectangle Rect => new Rectangle((int)X, (int)Y, 48, 48);
+
+        public Chest(float x, float y, Texture2D tex)
         {
-            _animTimer += 0.05f;
+            X = x;
+            Y = y;
+            Texture = tex;
+        }
+
+        public void Open() => Opened = true;
+
+        public Loot GetLoot()
+        {
+            var loot = new Loot();
+            int roll = Random.Shared.Next(100);
+            
+            if (roll < 30)
+            {
+                loot.Coins = 10 + Random.Shared.Next(20);
+                loot.Score = 100;
+                loot.Exp = 20;
+            }
+            else if (roll < 60)
+            {
+                loot.Coins = 5 + Random.Shared.Next(10);
+                loot.Score = 50;
+                loot.Exp = 30;
+            }
+            else if (roll < 80)
+            {
+                loot.Weapon = WeaponType.Spear;
+                loot.Score = 200;
+                loot.Exp = 50;
+            }
+            else if (roll < 95)
+            {
+                loot.Weapon = WeaponType.Axe;
+                loot.Score = 300;
+                loot.Exp = 75;
+            }
+            else
+            {
+                loot.Weapon = WeaponType.Sword;
+                loot.Score = 500;
+                loot.Exp = 100;
+            }
+            
+            return loot;
         }
     }
+
+    public class Loot
+    {
+        public int Coins;
+        public int Score;
+        public int Exp;
+        public WeaponType Weapon;
+    }
+
+    public class WeaponPickup
+    {
+        public float X, Y;
+        public WeaponType WeaponType;
+        public bool Collected;
+
+        public Rectangle Rect => new Rectangle((int)X, (int)Y, 48, 32);
+
+        public WeaponPickup(float x, float y, WeaponType type)
+        {
+            X = x;
+            Y = y;
+            WeaponType = type;
+        }
+    }
+
+    public enum WeaponType { None, Sword, Spear, Axe }
 
     public enum GameState { Menu, Playing, GameOver }
     public enum TransitionType { FadeOut, FadeIn, LevelComplete }
