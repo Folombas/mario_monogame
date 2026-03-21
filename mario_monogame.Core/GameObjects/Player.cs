@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
@@ -6,16 +7,28 @@ using System;
 namespace mario_monogame.Core.GameObjects
 {
     /// <summary>
-    /// Игрок в стиле Mario с классической физикой платформера.
+    /// Игрок в стиле платформера с использованием спрайтов.
     /// </summary>
     public class Player : IDisposable
     {
         private readonly GraphicsDevice _graphicsDevice;
         private Vector2 _position;
         private Vector2 _velocity;
-        private Texture2D _pixelTexture;
-        
-        // Физика Mario
+
+        // Спрайты
+        private Texture2D _standSprite;
+        private Texture2D _walk1Sprite;
+        private Texture2D _walk2Sprite;
+        private Texture2D _jumpSprite;
+        private Texture2D _hitSprite;
+        private Texture2D _climb1Sprite;
+        private Texture2D _climb2Sprite;
+        private Texture2D _duckSprite;
+        private Texture2D _frontSprite;
+        private Texture2D _swim1Sprite;
+        private Texture2D _swim2Sprite;
+
+        // Физика
         private bool _isGrounded;
         private bool _isJumping;
         private float _jumpCharge;
@@ -26,25 +39,20 @@ namespace mario_monogame.Core.GameObjects
         private readonly float _deceleration;
         private readonly float _maxSpeed;
         private readonly float _jumpForce;
-        
+
         // Состояние
         private PlayerState _state;
         private bool _facingRight;
         private float _walkAnimationTime;
         private bool _isWalking;
         private float _invincibilityTimer;
-        
-        // Размеры
+        private float _hitTimer;
+
+        // Размеры спрайта
         private float _width;
         private float _height;
         private float _originalHeight;
-        
-        // Цвета
-        private readonly Color _hatColor;
-        private readonly Color _shirtColor;
-        private readonly Color _overallsColor;
-        private readonly Color _skinColor;
-        private readonly Color _shoeColor;
+        private float _scale;
 
         public Vector2 Position { get => _position; set => _position = value; }
         public Vector2 Velocity { get => _velocity; set => _velocity = value; }
@@ -58,14 +66,28 @@ namespace mario_monogame.Core.GameObjects
         );
         public bool IsInvincible => _invincibilityTimer > 0;
         public bool IsBig => _state == PlayerState.Big || _state == PlayerState.Fire;
+        public bool IsFacingRight => _facingRight;
 
-        public Player(GraphicsDevice graphicsDevice, Vector2 startPosition)
+        public Player(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
         {
             _graphicsDevice = graphicsDevice;
             _position = startPosition;
             _velocity = Vector2.Zero;
-            
-            // Физика в стиле Mario
+
+            // Загрузка спрайтов
+            _standSprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_stand");
+            _walk1Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_walk1");
+            _walk2Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_walk2");
+            _jumpSprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_jump");
+            _hitSprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_hit");
+            _climb1Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_climb1");
+            _climb2Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_climb2");
+            _duckSprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_duck");
+            _frontSprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_front");
+            _swim1Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_swim1");
+            _swim2Sprite = content.Load<Texture2D>("Sprites/Players/128x256/Green/alienGreen_swim2");
+
+            // Физика
             _gravity = 2500f;
             _maxFallSpeed = 800f;
             _moveSpeed = 400f;
@@ -74,22 +96,13 @@ namespace mario_monogame.Core.GameObjects
             _maxSpeed = 350f;
             _jumpForce = 850f;
             _jumpCharge = 0f;
-            
-            // Размеры (маленький Марио)
-            _width = 32f;
-            _height = 32f;
-            _originalHeight = 32f;
-            
-            // Цвета (классический Марио)
-            _hatColor = new Color(230, 0, 0);      // Красная кепка
-            _shirtColor = new Color(230, 0, 0);     // Красная рубашка
-            _overallsColor = new Color(30, 30, 200); // Синий комбинезон
-            _skinColor = new Color(255, 200, 150);   // Телесный
-            _shoeColor = new Color(100, 60, 30);     // Коричневые ботинки
-            
-            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
-            _pixelTexture.SetData(new[] { Color.White });
-            
+
+            // Размеры (масштабируем спрайт 128x256 до 64x128)
+            _scale = 0.5f;
+            _width = 128f * _scale;
+            _height = 128f * _scale; // Уменьшенная высота для хитбокса
+            _originalHeight = 128f * _scale;
+
             _isGrounded = false;
             _isJumping = false;
             _facingRight = true;
@@ -97,18 +110,25 @@ namespace mario_monogame.Core.GameObjects
             _isWalking = false;
             _state = PlayerState.Small;
             _invincibilityTimer = 0f;
+            _hitTimer = 0f;
         }
 
         public void Update(GameTime gameTime, KeyboardState keyboardState, float groundY)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            
+
             // Сброс состояния
             _isWalking = false;
-            
-            // Управление (классическое Mario)
+
+            // Таймер попадания
+            if (_hitTimer > 0f)
+            {
+                _hitTimer -= elapsed;
+            }
+
+            // Управление
             float moveInput = 0f;
-            
+
             if (keyboardState.IsKeyDown(Keys.A) || keyboardState.IsKeyDown(Keys.Left))
             {
                 moveInput = -1f;
@@ -121,7 +141,7 @@ namespace mario_monogame.Core.GameObjects
                 _facingRight = true;
                 _isWalking = true;
             }
-            
+
             // Ускорение/замедление
             if (moveInput != 0f)
             {
@@ -140,13 +160,13 @@ namespace mario_monogame.Core.GameObjects
                     _velocity.X = 0f;
                 }
             }
-            
+
             // Трение о землю
             if (_isGrounded)
             {
                 _velocity.X *= 0.85f;
             }
-            
+
             // Прыжок (с переменной высотой)
             if (keyboardState.IsKeyDown(Keys.Space) || keyboardState.IsKeyDown(Keys.W) || keyboardState.IsKeyDown(Keys.Up))
             {
@@ -159,7 +179,6 @@ namespace mario_monogame.Core.GameObjects
                 }
                 else if (!_isGrounded && _jumpCharge < 0.15f)
                 {
-                    // Дополнительный импульс при удержании (переменная высота прыжка)
                     _jumpCharge += elapsed;
                     _velocity.Y = Math.Max(_velocity.Y, -_jumpForce * 0.5f);
                 }
@@ -173,14 +192,14 @@ namespace mario_monogame.Core.GameObjects
                 }
                 _isJumping = false;
             }
-            
+
             // Гравитация
             _velocity.Y += _gravity * elapsed;
             _velocity.Y = Math.Min(_velocity.Y, _maxFallSpeed);
-            
+
             // Применение скорости
             _position += _velocity * elapsed;
-            
+
             // Проверка земли
             if (_position.Y >= groundY)
             {
@@ -189,58 +208,59 @@ namespace mario_monogame.Core.GameObjects
                 _isJumping = false;
                 _velocity.Y = 0f;
             }
-            
+
             // Анимация ходьбы
             if (_isWalking && _isGrounded)
             {
-                _walkAnimationTime += elapsed * Math.Abs(_velocity.X) * 0.05f;
+                _walkAnimationTime += elapsed * Math.Abs(_velocity.X) * 0.1f;
             }
             else
             {
                 _walkAnimationTime = 0f;
             }
-            
+
             // Таймер неуязвимости
             if (_invincibilityTimer > 0f)
             {
                 _invincibilityTimer -= elapsed;
             }
         }
-        
+
         public void Grow()
         {
             if (_state == PlayerState.Small)
             {
                 _state = PlayerState.Big;
-                _height = _originalHeight * 2f;
-                _position.Y -= _originalHeight;
+                _height = _originalHeight * 1.2f;
+                _position.Y -= _originalHeight * 0.2f;
             }
             else if (_state == PlayerState.Big)
             {
                 _state = PlayerState.Fire;
             }
         }
-        
+
         public void Shrink()
         {
             if (_state == PlayerState.Fire)
             {
                 _state = PlayerState.Big;
-                _height = _originalHeight * 2f;
+                _height = _originalHeight * 1.2f;
             }
             else if (_state == PlayerState.Big)
             {
                 _state = PlayerState.Small;
                 _height = _originalHeight;
-                _position.Y += _originalHeight;
-                _invincibilityTimer = 2f; // 2 секунды неуязвимости
+                _position.Y += _originalHeight * 0.2f;
+                _invincibilityTimer = 2f;
             }
         }
-        
+
         public void Hit()
         {
-            if (!IsInvincible)
+            if (!IsInvincible && _hitTimer <= 0f)
             {
+                _hitTimer = 0.3f;
                 Shrink();
             }
         }
@@ -250,199 +270,59 @@ namespace mario_monogame.Core.GameObjects
             // Мерцание если неуязвим
             if (IsInvincible && (int)(_invincibilityTimer * 10) % 2 == 0)
                 return;
-            
-            float legOffset = (float)Math.Sin(_walkAnimationTime) * 4f;
-            
-            // Рисуем Марио
-            DrawHead(spriteBatch, cameraPosition);
-            DrawBody(spriteBatch, cameraPosition, legOffset);
-            DrawLegs(spriteBatch, cameraPosition, legOffset);
-        }
-        
-        private void DrawHead(SpriteBatch spriteBatch, Vector2 cameraPosition)
-        {
+
             Vector2 drawPos = _position - cameraPosition;
-            float headWidth = _width * 0.9f;
-            float headHeight = _height * 0.35f;
+            Texture2D currentSprite = GetCurrentSprite();
+
+            // Отражение по горизонтали если смотрим влево
+            SpriteEffects effects = _facingRight ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+
+            // Рисуем спрайт с центрированием
+            Vector2 origin = new Vector2(currentSprite.Width / 2f, currentSprite.Height / 2f);
             
-            // Кепка
             spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - headWidth / 2),
-                    (int)(drawPos.Y - _height / 2 + 2),
-                    (int)headWidth,
-                    (int)(headHeight * 0.4f)
-                ),
-                _hatColor
-            );
-            
-            // Поля кепки
-            float brimX = _facingRight ? drawPos.X + headWidth * 0.1f : drawPos.X - headWidth * 0.5f;
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)brimX,
-                    (int)(drawPos.Y - _height / 2 + headHeight * 0.25f),
-                    (int)(headWidth * 0.4f),
-                    (int)(headHeight * 0.2f)
-                ),
-                _hatColor
-            );
-            
-            // Лицо
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - headWidth / 2 + 4),
-                    (int)(drawPos.Y - _height / 2 + headHeight * 0.35f),
-                    (int)(headWidth - 8),
-                    (int)(headHeight * 0.65f)
-                ),
-                _skinColor
-            );
-            
-            // Усы
-            float mustacheX = _facingRight ? drawPos.X + 2f : drawPos.X - 2f;
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(mustacheX - 6),
-                    (int)(drawPos.Y - _height / 2 + headHeight * 0.7f),
-                    12,
-                    4
-                ),
-                Color.Black
-            );
-            
-            // Нос
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(mustacheX - 2),
-                    (int)(drawPos.Y - _height / 2 + headHeight * 0.55f),
-                    6,
-                    5
-                ),
-                _skinColor
+                currentSprite,
+                drawPos,
+                null,
+                Color.White,
+                0f,
+                origin,
+                _scale,
+                effects,
+                0f
             );
         }
-        
-        private void DrawBody(SpriteBatch spriteBatch, Vector2 cameraPosition, float legOffset)
+
+        private Texture2D GetCurrentSprite()
         {
-            Vector2 drawPos = _position - cameraPosition;
-            float bodyWidth = _width * 0.85f;
-            float bodyHeight = _height * 0.35f;
-            float bodyY = drawPos.Y - _height * 0.1f;
-            
-            // Рубашка
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - bodyWidth / 2),
-                    (int)(bodyY - bodyHeight / 2),
-                    (int)bodyWidth,
-                    (int)bodyHeight
-                ),
-                _shirtColor
-            );
-            
-            // Комбинезон
-            float overallsHeight = bodyHeight * 0.6f;
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - bodyWidth / 2),
-                    (int)(bodyY + bodyHeight * 0.2f),
-                    (int)bodyWidth,
-                    (int)overallsHeight
-                ),
-                _overallsColor
-            );
-            
-            // Пуговицы
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - 4),
-                    (int)(bodyY - 2),
-                    3,
-                    3
-                ),
-                Color.Gold
-            );
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X + 1),
-                    (int)(bodyY - 2),
-                    3,
-                    3
-                ),
-                Color.Gold
-            );
+            // При попадании показываем спрайт удара
+            if (_hitTimer > 0f)
+            {
+                return _hitSprite;
+            }
+
+            // В прыжке
+            if (!_isGrounded)
+            {
+                return _jumpSprite;
+            }
+
+            // Идём
+            if (_isWalking)
+            {
+                int frame = (int)(_walkAnimationTime * 10) % 2;
+                return frame == 0 ? _walk1Sprite : _walk2Sprite;
+            }
+
+            // Стоим
+            return _standSprite;
         }
-        
-        private void DrawLegs(SpriteBatch spriteBatch, Vector2 cameraPosition, float legOffset)
-        {
-            Vector2 drawPos = _position - cameraPosition;
-            float legWidth = _width * 0.35f;
-            float legHeight = _height * 0.25f;
-            float legY = drawPos.Y + _height * 0.35f;
-            
-            // Левая нога
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - legWidth - 2),
-                    (int)(legY + legOffset),
-                    (int)legWidth,
-                    (int)legHeight
-                ),
-                _overallsColor
-            );
-            
-            // Правая нога
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X + 2),
-                    (int)(legY - legOffset),
-                    (int)legWidth,
-                    (int)legHeight
-                ),
-                _overallsColor
-            );
-            
-            // Ботинки
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - legWidth - 3),
-                    (int)(legY + legHeight + legOffset),
-                    (int)(legWidth + 2),
-                    6
-                ),
-                _shoeColor
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X + 1),
-                    (int)(legY + legHeight - legOffset),
-                    (int)(legWidth + 2),
-                    6
-                ),
-                _shoeColor
-            );
-        }
-        
+
         public void ApplyGravity(float amount)
         {
             _velocity.Y += amount;
         }
-        
+
         public void SetInvincible(float duration)
         {
             _invincibilityTimer = duration;
@@ -450,10 +330,10 @@ namespace mario_monogame.Core.GameObjects
 
         public void Dispose()
         {
-            _pixelTexture?.Dispose();
+            // Текстуры загружаются через ContentManager и освобождаются им
         }
     }
-    
+
     public enum PlayerState
     {
         Small,

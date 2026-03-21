@@ -1,32 +1,38 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 
 namespace mario_monogame.Core.GameObjects
 {
     /// <summary>
-    /// Гумба (гриб-враг) в стиле Mario.
+    /// Базовый класс для врагов с использованием спрайтов.
     /// </summary>
-    public class Goomba : IDisposable
+    public class Enemy : IDisposable
     {
-        private readonly GraphicsDevice _graphicsDevice;
-        private Vector2 _position;
-        private Vector2 _velocity;
-        private Texture2D _pixelTexture;
-        
+        protected readonly GraphicsDevice _graphicsDevice;
+        protected Vector2 _position;
+        protected Vector2 _velocity;
+
+        // Спрайты
+        protected Texture2D _sprite1;
+        protected Texture2D _sprite2;
+        protected Texture2D _deadSprite;
+
         // Состояние
-        private bool _isAlive;
-        private float _squishTimer;
-        private readonly float _moveSpeed;
-        private readonly float _gravity;
-        
+        protected bool _isAlive;
+        protected float _squishTimer;
+        protected float _moveSpeed;
+        protected float _gravity;
+        protected bool _facingRight;
+
         // Размеры
-        private readonly float _width;
-        private readonly float _height;
-        
+        protected float _width;
+        protected float _height;
+        protected float _scale;
+
         // Анимация
-        private float _walkAnimationTime;
-        private bool _facingRight;
+        protected float _walkAnimationTime;
 
         public Vector2 Position => _position;
         public Rectangle Bounds => new Rectangle(
@@ -37,442 +43,534 @@ namespace mario_monogame.Core.GameObjects
         );
         public bool IsAlive => _isAlive;
 
-        public Goomba(GraphicsDevice graphicsDevice, Vector2 startPosition)
+        public Enemy(GraphicsDevice graphicsDevice, Vector2 startPosition, float scale = 0.5f)
         {
             _graphicsDevice = graphicsDevice;
             _position = startPosition;
             _velocity = Vector2.Zero;
-            
+            _scale = scale;
             _moveSpeed = 50f;
             _gravity = 1500f;
-            
-            _width = 32f;
-            _height = 32f;
-            
-            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
-            _pixelTexture.SetData(new[] { Color.White });
-            
             _isAlive = true;
             _squishTimer = 0f;
             _walkAnimationTime = 0f;
             _facingRight = Random.Shared.Next(2) == 0;
         }
 
-        public void Update(GameTime gameTime, float groundY, Player player)
+        public virtual void Update(GameTime gameTime, float groundY, Player player)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            
+
             if (!_isAlive)
             {
                 _squishTimer -= elapsed;
                 return;
             }
-            
+
             // Движение
             float moveDir = _facingRight ? 1f : -1f;
             _velocity.X = moveDir * _moveSpeed;
-            
+
             // Гравитация
             _velocity.Y += _gravity * elapsed;
-            
+
             // Применение
             _position += _velocity * elapsed;
-            
+
             // Проверка земли
             if (_position.Y >= groundY)
             {
                 _position.Y = groundY;
                 _velocity.Y = 0f;
             }
-            
-            // Разворот на краях
+
+            // Анимация
             _walkAnimationTime += elapsed * 5f;
-            
-            // Проверка столкновения с игроком
-            if (player.Bounds.Intersects(Bounds))
-            {
-                // Игрок прыгнул сверху - убиваем гумбу
-                if (player.Velocity.Y > 0 && player.Position.Y < _position.Y - 10f)
-                {
-                    Squish();
-                    player.ApplyGravity(-500f); // Отскок
-                }
-                // Иначе игрок получает урон (обрабатывается в Player)
-            }
         }
 
-        public void Squish()
+        public virtual void Squish()
         {
             _isAlive = false;
             _squishTimer = 0.3f;
         }
 
-        public void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
+        public virtual void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
         {
             Vector2 drawPos = _position - cameraPosition;
-            
+
             if (!_isAlive)
             {
-                // Сплюснутая версия
                 DrawSquished(spriteBatch, drawPos);
                 return;
             }
-            
-            // Тело (гриб)
-            DrawCap(spriteBatch, drawPos);
-            
-            // Ножка
-            DrawStem(spriteBatch, drawPos);
-            
-            // Глаза
-            DrawEyes(spriteBatch, drawPos);
-            
-            // Ноги
-            DrawFeet(spriteBatch, drawPos);
+
+            Texture2D currentSprite = GetCurrentSprite();
+            SpriteEffects effects = _facingRight ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+            Vector2 origin = new Vector2(currentSprite.Width / 2f, currentSprite.Height / 2f);
+
+            spriteBatch.Draw(
+                currentSprite,
+                drawPos,
+                null,
+                Color.White,
+                0f,
+                origin,
+                _scale,
+                effects,
+                0f
+            );
         }
-        
-        private void DrawCap(SpriteBatch spriteBatch, Vector2 position)
+
+        protected virtual Texture2D GetCurrentSprite()
         {
-            float capWidth = _width * 0.9f;
-            float capHeight = _height * 0.5f;
-            
-            // Основная часть шляпки
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - capWidth / 2),
-                    (int)(position.Y - _height / 2),
-                    (int)capWidth,
-                    (int)capHeight
-                ),
-                new Color(140, 80, 40) // Коричневый
-            );
-            
-            // Пятна на шляпке
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - 8),
-                    (int)(position.Y - _height / 2 + 8),
-                    6,
-                    6
-                ),
-                new Color(100, 50, 30)
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X + 2),
-                    (int)(position.Y - _height / 2 + 5),
-                    5,
-                    5
-                ),
-                new Color(100, 50, 30)
-            );
+            int frame = (int)(_walkAnimationTime * 10) % 2;
+            return frame == 0 ? _sprite1 : _sprite2;
         }
-        
-        private void DrawStem(SpriteBatch spriteBatch, Vector2 position)
-        {
-            float stemWidth = _width * 0.5f;
-            float stemHeight = _height * 0.35f;
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - stemWidth / 2),
-                    (int)(position.Y - stemHeight / 2 + 5),
-                    (int)stemWidth,
-                    (int)stemHeight
-                ),
-                new Color((byte)220, (byte)180, (byte)120, (byte)255) // Бежевый
-            );
-        }
-        
-        private void DrawEyes(SpriteBatch spriteBatch, Vector2 position)
-        {
-            // Белки глаз
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - 8),
-                    (int)(position.Y - 5),
-                    6,
-                    7
-                ),
-                Color.White
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X + 2),
-                    (int)(position.Y - 5),
-                    6,
-                    7
-                ),
-                Color.White
-            );
-            
-            // Зрачки
-            float pupilOffset = _facingRight ? 2f : -2f;
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - 8 + pupilOffset),
-                    (int)(position.Y - 3),
-                    3,
-                    4
-                ),
-                Color.Black
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X + 2 + pupilOffset),
-                    (int)(position.Y - 3),
-                    3,
-                    4
-                ),
-                Color.Black
-            );
-        }
-        
-        private void DrawFeet(SpriteBatch spriteBatch, Vector2 position)
-        {
-            float footWidth = _width * 0.35f;
-            float footHeight = _height * 0.2f;
-            float footOffset = (float)Math.Sin(_walkAnimationTime) * 3f;
-            
-            // Левая нога
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - 10 - footOffset),
-                    (int)(position.Y + _height / 2 - footHeight),
-                    (int)footWidth,
-                    (int)footHeight
-                ),
-                Color.Black
-            );
-            
-            // Правая нога
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X + 10 + footOffset),
-                    (int)(position.Y + _height / 2 - footHeight),
-                    (int)footWidth,
-                    (int)footHeight
-                ),
-                Color.Black
-            );
-        }
-        
-        private void DrawSquished(SpriteBatch spriteBatch, Vector2 position)
+
+        protected virtual void DrawSquished(SpriteBatch spriteBatch, Vector2 position)
         {
             float alpha = _squishTimer / 0.3f;
+            Texture2D deadSprite = _deadSprite ?? _sprite1;
             
             spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(position.X - _width / 2),
-                    (int)(position.Y + _height / 2 - 8),
-                    (int)_width,
-                    8
-                ),
-                new Color((byte)140, (byte)80, (byte)40, (byte)(alpha * 255))
+                deadSprite,
+                position,
+                null,
+                new Color(Color.White, alpha),
+                0f,
+                new Vector2(deadSprite.Width / 2f, deadSprite.Height / 2f),
+                _scale * 0.5f,
+                SpriteEffects.None,
+                0f
             );
         }
-        
+
         public void ReverseDirection()
         {
             _facingRight = !_facingRight;
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
-            _pixelTexture?.Dispose();
+            // Текстуры освобождаются ContentManager
         }
     }
-    
+
     /// <summary>
-    /// Ядовитый гриб (бонус).
+    /// Гумба (гриб-враг) в стиле Mario.
     /// </summary>
-    public class PoisonMushroom : IDisposable
+    public class Goomba : Enemy
     {
-        private readonly GraphicsDevice _graphicsDevice;
-        private Vector2 _position;
-        private Vector2 _velocity;
-        private Texture2D _pixelTexture;
-        
-        private bool _isCollected;
-        private readonly float _moveSpeed;
-        private readonly float _gravity;
-        private float _bounceTime;
-        
-        private readonly float _width;
-        private readonly float _height;
-
-        public Vector2 Position => _position;
-        public Rectangle Bounds => new Rectangle(
-            (int)(_position.X - _width / 2),
-            (int)(_position.Y - _height / 2),
-            (int)_width,
-            (int)_height
-        );
-        public bool IsCollected => _isCollected;
-
-        public PoisonMushroom(GraphicsDevice graphicsDevice, Vector2 startPosition)
+        public Goomba(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
+            : base(graphicsDevice, startPosition, 0.5f)
         {
-            _graphicsDevice = graphicsDevice;
-            _position = startPosition;
-            _velocity = Vector2.Zero;
-            
-            _moveSpeed = 80f;
-            _gravity = 1200f;
-            
-            _width = 30f;
-            _height = 30f;
-            
-            _pixelTexture = new Texture2D(graphicsDevice, 1, 1);
-            _pixelTexture.SetData(new[] { Color.White });
-            
-            _isCollected = false;
-            _bounceTime = 0f;
+            // Загружаем спрайты слизня (похож на гумбу)
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/slimeGreen");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/slimeGreen_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/slimeGreen_dead");
+
+            _width = 64f * _scale;
+            _height = 32f * _scale;
+            _moveSpeed = 60f;
         }
 
-        public void Update(GameTime gameTime, float groundY)
+        public override void Update(GameTime gameTime, float groundY, Player player)
+        {
+            base.Update(gameTime, groundY, player);
+
+            // Разворот при столкновении с игроком
+            if (player.Bounds.Intersects(Bounds) && _isAlive)
+            {
+                if (player.Velocity.Y > 0 && player.Position.Y < _position.Y - 10f)
+                {
+                    Squish();
+                    player.ApplyGravity(-500f);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Пила-враг.
+    /// </summary>
+    public class SawEnemy : Enemy
+    {
+        public SawEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
+            : base(graphicsDevice, startPosition, 0.6f)
+        {
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/saw");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/saw_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/saw_dead");
+
+            _width = 64f * _scale;
+            _height = 64f * _scale;
+            _moveSpeed = 80f;
+            _gravity = 0f; // Пилы могут летать
+        }
+
+        public override void Update(GameTime gameTime, float groundY, Player player)
         {
             float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            
-            if (_isCollected) return;
-            
-            // Движение
-            _velocity.X = (float)Math.Sin(_bounceTime) * _moveSpeed;
-            
-            // Гравитация
-            _velocity.Y += _gravity * elapsed;
-            
-            // Применение
+
+            if (!_isAlive)
+            {
+                _squishTimer -= elapsed;
+                return;
+            }
+
+            // Движение по синусоиде
+            _velocity.X = (float)Math.Sin(_walkAnimationTime) * _moveSpeed;
+            _velocity.Y = (float)Math.Cos(_walkAnimationTime * 2) * 30f;
+
             _position += _velocity * elapsed;
-            
-            // Проверка земли
+            _walkAnimationTime += elapsed * 3f;
+        }
+    }
+
+    /// <summary>
+    /// Рыба-враг (плавает в воде или прыгает).
+    /// </summary>
+    public class FishEnemy : Enemy
+    {
+        private readonly bool _isAquatic;
+        private float _swimOffset;
+
+        public FishEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content, bool isAquatic = false)
+            : base(graphicsDevice, startPosition, 0.4f)
+        {
+            _isAquatic = isAquatic;
+
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/fishGreen");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/fishGreen_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/fishGreen_dead");
+
+            _width = 64f * _scale;
+            _height = 32f * _scale;
+            _moveSpeed = 100f;
+            _facingRight = true;
+            _swimOffset = 0f;
+        }
+
+        public override void Update(GameTime gameTime, float groundY, Player player)
+        {
+            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (!_isAlive)
+            {
+                _squishTimer -= elapsed;
+                return;
+            }
+
+            if (_isAquatic)
+            {
+                // Плавание в воде
+                _velocity.X = _facingRight ? _moveSpeed : -_moveSpeed;
+                _swimOffset += elapsed * 5f;
+                _velocity.Y = (float)Math.Sin(_swimOffset) * 50f;
+            }
+            else
+            {
+                // Прыгающая рыба
+                _velocity.X = _facingRight ? _moveSpeed : -_moveSpeed;
+                
+                if (_position.Y >= groundY)
+                {
+                    _position.Y = groundY;
+                    _velocity.Y = -300f; // Прыжок
+                }
+                else
+                {
+                    _velocity.Y += _gravity * elapsed;
+                }
+            }
+
+            _position += _velocity * elapsed;
+            _walkAnimationTime += elapsed * 5f;
+        }
+
+        public override void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
+        {
+            Vector2 drawPos = _position - cameraPosition;
+
+            if (!_isAlive)
+            {
+                DrawSquished(spriteBatch, drawPos);
+                return;
+            }
+
+            Texture2D currentSprite = GetCurrentSprite();
+            // Рыбы всегда смотрят вправо по спрайту
+            SpriteEffects effects = _facingRight ? SpriteEffects.FlipVertically : SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically;
+            Vector2 origin = new Vector2(currentSprite.Width / 2f, currentSprite.Height / 2f);
+
+            spriteBatch.Draw(
+                currentSprite,
+                drawPos,
+                null,
+                Color.White,
+                0f,
+                origin,
+                _scale,
+                effects,
+                0f
+            );
+        }
+    }
+
+    /// <summary>
+    /// Слизень-враг.
+    /// </summary>
+    public class SlimeEnemy : Enemy
+    {
+        private readonly Color _slimeColor;
+
+        public SlimeEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content, string color = "Green")
+            : base(graphicsDevice, startPosition, 0.5f)
+        {
+            _slimeColor = color switch
+            {
+                "Blue" => Color.Blue,
+                "Purple" => Color.Purple,
+                _ => Color.Green
+            };
+
+            _sprite1 = content.Load<Texture2D>($"Sprites/Enemies/slime{color}");
+            _sprite2 = content.Load<Texture2D>($"Sprites/Enemies/slime{color}_move");
+            _deadSprite = content.Load<Texture2D>($"Sprites/Enemies/slime{color}_dead");
+
+            _width = 64f * _scale;
+            _height = 40f * _scale;
+            _moveSpeed = 40f;
+        }
+
+        public override void Update(GameTime gameTime, float groundY, Player player)
+        {
+            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (!_isAlive)
+            {
+                _squishTimer -= elapsed;
+                return;
+            }
+
+            // Медленное движение с подпрыгиванием
+            float moveDir = _facingRight ? 1f : -1f;
+            _velocity.X = moveDir * _moveSpeed;
+            _velocity.Y += _gravity * elapsed;
+
             if (_position.Y >= groundY)
             {
                 _position.Y = groundY;
                 _velocity.Y = 0f;
+                
+                // Подпрыгивание
+                if (Random.Shared.Next(100) < 2)
+                {
+                    _velocity.Y = -200f;
+                }
             }
-            
-            _bounceTime += elapsed * 3f;
+
+            _position += _velocity * elapsed;
+            _walkAnimationTime += elapsed * 3f;
+        }
+    }
+
+    /// <summary>
+    /// Улитка-враг (медленная, с панцирем).
+    /// </summary>
+    public class SnailEnemy : Enemy
+    {
+        public SnailEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
+            : base(graphicsDevice, startPosition, 0.5f)
+        {
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/snail");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/snail_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/snail_shell");
+
+            _width = 64f * _scale;
+            _height = 48f * _scale;
+            _moveSpeed = 30f;
+        }
+    }
+
+    /// <summary>
+    /// Летающий враг (муха/пчела).
+    /// </summary>
+    public class FlyingEnemy : Enemy
+    {
+        private float _flyOffset;
+        private readonly float _flyHeight;
+
+        public FlyingEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content, string type = "bee")
+            : base(graphicsDevice, startPosition, 0.4f)
+        {
+            _sprite1 = content.Load<Texture2D>($"Sprites/Enemies/{type}");
+            _sprite2 = content.Load<Texture2D>($"Sprites/Enemies/{type}_move");
+            _deadSprite = content.Load<Texture2D>($"Sprites/Enemies/{type}_dead");
+
+            _width = 48f * _scale;
+            _height = 48f * _scale;
+            _moveSpeed = 70f;
+            _gravity = 200f;
+            _flyOffset = 0f;
+            _flyHeight = 50f;
         }
 
-        public void Collect()
+        public override void Update(GameTime gameTime, float groundY, Player player)
         {
-            _isCollected = true;
-        }
+            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
-        public void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
-        {
-            if (_isCollected) return;
-            
-            Vector2 drawPos = _position - cameraPosition;
-            
-            // Шляпка (ядовитый зелёный цвет)
-            float capWidth = _width * 0.9f;
-            float capHeight = _height * 0.55f;
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - capWidth / 2),
-                    (int)(drawPos.Y - _height / 2),
-                    (int)capWidth,
-                    (int)capHeight
-                ),
-                new Color(50, 180, 50) // Ядовито-зелёный
-            );
-            
-            // Пятна (белые точки)
-            for (int i = 0; i < 5; i++)
+            if (!_isAlive)
             {
-                float px = drawPos.X - 10 + (i % 3) * 10;
-                float py = drawPos.Y - _height / 2 + 5 + (i / 3) * 8f;
-                spriteBatch.Draw(
-                    _pixelTexture,
-                    new Rectangle(
-                        (int)px,
-                        (int)py,
-                        4,
-                        4
-                    ),
-                    Color.White
-                );
+                _squishTimer -= elapsed;
+                return;
             }
+
+            // Полёт по синусоиде
+            float moveDir = _facingRight ? 1f : -1f;
+            _velocity.X = moveDir * _moveSpeed;
             
-            // Ножка
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - _width * 0.25f),
-                    (int)(drawPos.Y),
-                    (int)(_width * 0.5f),
-                    (int)(_height * 0.45f)
-                ),
-                new Color(240, 230, 200)
-            );
-            
-            // Злые глаза
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - 8),
-                    (int)(drawPos.Y - 2),
-                    6,
-                    6
-                ),
-                Color.White
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X + 2),
-                    (int)(drawPos.Y - 2),
-                    6,
-                    6
-                ),
-                Color.White
-            );
-            
-            // Зрачки
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X - 6),
-                    (int)(drawPos.Y),
-                    3,
-                    3
-                ),
-                Color.Red
-            );
-            
-            spriteBatch.Draw(
-                _pixelTexture,
-                new Rectangle(
-                    (int)(drawPos.X + 4),
-                    (int)(drawPos.Y),
-                    3,
-                    3
-                ),
-                Color.Red
-            );
+            _flyOffset += elapsed * 8f;
+            _velocity.Y = (float)Math.Sin(_flyOffset) * 60f;
+
+            _position += _velocity * elapsed;
+            _walkAnimationTime += elapsed * 10f;
+
+            // Ограничение высоты
+            if (_position.Y < groundY - _flyHeight)
+            {
+                _position.Y = groundY - _flyHeight;
+            }
         }
 
-        public void Dispose()
+        public override void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition)
         {
-            _pixelTexture?.Dispose();
+            Vector2 drawPos = _position - cameraPosition;
+
+            if (!_isAlive)
+            {
+                DrawSquished(spriteBatch, drawPos);
+                return;
+            }
+
+            Texture2D currentSprite = GetCurrentSprite();
+            SpriteEffects effects = _facingRight ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+            Vector2 origin = new Vector2(currentSprite.Width / 2f, currentSprite.Height / 2f);
+
+            // Быстрая анимация крыльев
+            int wingFrame = (int)(_walkAnimationTime * 20) % 2;
+            Texture2D spriteToDraw = wingFrame == 0 ? _sprite1 : _sprite2;
+
+            spriteBatch.Draw(
+                spriteToDraw,
+                drawPos,
+                null,
+                Color.White,
+                0f,
+                origin,
+                _scale,
+                effects,
+                0f
+            );
         }
+    }
+
+    /// <summary>
+    /// Мышь-враг (быстрая, маленькая).
+    /// </summary>
+    public class MouseEnemy : Enemy
+    {
+        public MouseEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
+            : base(graphicsDevice, startPosition, 0.4f)
+        {
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/mouse");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/mouse_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/mouse_dead");
+
+            _width = 48f * _scale;
+            _height = 32f * _scale;
+            _moveSpeed = 120f; // Быстрая
+        }
+    }
+
+    /// <summary>
+    /// Червяк-враг.
+    /// </summary>
+    public class WormEnemy : Enemy
+    {
+        public WormEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content, string color = "Green")
+            : base(graphicsDevice, startPosition, 0.5f)
+        {
+            _sprite1 = content.Load<Texture2D>($"Sprites/Enemies/worm{color}");
+            _sprite2 = content.Load<Texture2D>($"Sprites/Enemies/worm{color}_move");
+            _deadSprite = content.Load<Texture2D>($"Sprites/Enemies/worm{color}_dead");
+
+            _width = 64f * _scale;
+            _height = 32f * _scale;
+            _moveSpeed = 50f;
+        }
+    }
+
+    /// <summary>
+    /// Лягушка-враг (прыгает).
+    /// </summary>
+    public class FrogEnemy : Enemy
+    {
+        private float _jumpTimer;
+        private bool _isJumping;
+
+        public FrogEnemy(GraphicsDevice graphicsDevice, Vector2 startPosition, ContentManager content)
+            : base(graphicsDevice, startPosition, 0.5f)
+        {
+            _sprite1 = content.Load<Texture2D>("Sprites/Enemies/frog");
+            _sprite2 = content.Load<Texture2D>("Sprites/Enemies/frog_move");
+            _deadSprite = content.Load<Texture2D>("Sprites/Enemies/frog_dead");
+
+            _width = 64f * _scale;
+            _height = 48f * _scale;
+            _moveSpeed = 40f;
+            _jumpTimer = 0f;
+            _isJumping = false;
+        }
+
+        public override void Update(GameTime gameTime, float groundY, Player player)
+        {
+            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+            if (!_isAlive)
+            {
+                _squishTimer -= elapsed;
+                return;
+            }
+
+            _jumpTimer += elapsed;
+
+            // Прыжок каждые 1-2 секунды
+            if (_jumpTimer > 1.5f && _isGrounded)
+            {
+                _isJumping = true;
+                _velocity.Y = -350f;
+                float moveDir = _facingRight ? 1f : -1f;
+                _velocity.X = moveDir * 150f;
+                _jumpTimer = 0f;
+            }
+            else
+            {
+                _velocity.Y += _gravity * elapsed;
+                _velocity.X = 0f;
+            }
+
+            if (_position.Y >= groundY)
+            {
+                _position.Y = groundY;
+                _velocity.Y = 0f;
+                _isJumping = false;
+            }
+
+            _position += _velocity * elapsed;
+            _walkAnimationTime += elapsed * 5f;
+        }
+
+        private bool _isGrounded => _position.Y >= 0; // Упрощённо
     }
 }
