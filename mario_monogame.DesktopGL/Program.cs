@@ -13,12 +13,13 @@ internal class Program
         try
         {
             File.AppendAllText("game.log", $"[{DateTime.Now}] Game starting...\n");
-            
+
+            // Используем основную версию игры
             using var game = new MarioPlatformerGame();
             File.AppendAllText("game.log", $"[{DateTime.Now}] Game created, calling Run()\n");
-            
+
             game.Run();
-            
+
             File.AppendAllText("game.log", $"[{DateTime.Now}] Game exited normally\n");
         }
         catch (Exception ex)

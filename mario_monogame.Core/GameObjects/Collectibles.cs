@@ -6,6 +6,40 @@ using System;
 namespace mario_monogame.Core.GameObjects
 {
     /// <summary>
+    /// Базовый класс для всех собираемых предметов.
+    /// </summary>
+    public abstract class Collectible : IDisposable
+    {
+        protected GraphicsDevice _graphicsDevice;
+        protected Vector2 _position;
+        protected bool _isCollected;
+        protected float _width = 32f;
+        protected float _height = 32f;
+        protected float _scale = 0.6f;
+        protected Texture2D _sprite;
+
+        public Vector2 Position => _position;
+        public Rectangle Bounds => new Rectangle(
+            (int)(_position.X - _width / 2),
+            (int)(_position.Y - _height / 2),
+            (int)_width,
+            (int)_height
+        );
+        public bool IsCollected => _isCollected;
+
+        protected Collectible(GraphicsDevice graphicsDevice, Vector2 startPosition)
+        {
+            _graphicsDevice = graphicsDevice;
+            _position = startPosition;
+        }
+
+        public virtual void Update(float deltaTime) { }
+        public virtual void Collect() => _isCollected = true;
+        public virtual void Draw(SpriteBatch spriteBatch, Vector2 cameraPosition) { }
+        public virtual void Dispose() => _sprite = null;
+    }
+
+    /// <summary>
     /// Монета в стиле платформера с использованием спрайтов.
     /// </summary>
     public class Coin : IDisposable
